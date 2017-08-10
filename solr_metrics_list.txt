@@ -1,0 +1,9 @@
+numDocs
+maxDoc
+CORE.coreName
+CORE.fs.totalSpace
+CORE.fs.usableSpace
+INDEX.size
+UPDATE.updateHandler.adds
+UPDATE.updateHandler.errors
+UPDATE.updateHandler.deletesByQuery
