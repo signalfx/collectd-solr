@@ -6,6 +6,7 @@
 import collectd
 import sys
 import urllib2
+import re
 
 try:
     import xml.etree.cElementTree as etree
@@ -66,6 +67,16 @@ def load_metrics_list():
     metrics_list = raw_data.splitlines()
 
 
+def parse_mtsname(mts_name):
+    """Remove any slash (/) chars and duplicate attribute names"""
+    mts_name = re.sub(r'(\./|/)', '.', mts_name)
+    mts_name = re.sub(r'ADMIN\.admin\.', 'ADMIN.', mts_name)
+    mts_name = re.sub(r'QUERY\.query\.', 'QUERY.', mts_name)
+    mts_name = re.sub(r'UPDATE\.update\.', 'UPDATE.', mts_name)
+    mts_name = re.sub(r'REPLICATION\.replication\.', 'REPLICATION.', mts_name)
+    return mts_name
+
+
 def get_cores():
     url = 'http://%s:%s/%s/admin/cores?action=status' % (SOLR_HOST, SOLR_PORT, SOLR_URL)
     cores = []
@@ -95,14 +106,35 @@ def dispatch_value(instance, key, value, value_type):
     # Uncomment below to send data over collectd-python plugin
     val.dispatch()
 
-# TODO
-def dispatch_counter_metrics(core, solr_metrics):
-    """Extract required counter metrics and dispatch to collectd"""
-    for solrMts in solr_metrics.findall('./lst/lst/lst/int'):
+
+def dispatch_core_counter_metrics(cores, solr_metrics):
+    """Extract required gauge metrics and dispatch to collectd"""
+    core = cores[0]
+    mts_val = ''
+    for solrMts in solr_metrics.findall('./lst/lst/lst'):
         mts_name = solrMts.attrib['name'].strip()
-        mts_val = solrMts.text
-        log_verbose('Solr metric: %s, Value : %s' % (mts_name, mts_val))
-        dispatch_value(core, mts_name, mts_val, 'counter')
+        mts_name = parse_mtsname(mts_name)
+        if mts_name in metrics_list:
+            for solrMtsVal in solrMts.findall('./'):
+                mts_val = solrMtsVal[0].text
+            if mts_val in cores:
+                core = mts_val
+                continue
+            log_verbose('Core: %s | Solr metric: %s, Value : %s' % (core, mts_name, mts_val))
+            dispatch_value(core, mts_name, mts_val, 'counter')
+
+
+def dispatch_counter_metrics(registry, solr_metrics):
+    """Extract required counter metrics and dispatch to collectd"""
+    mts_val = ''
+    for solrMts in solr_metrics.findall('./lst/lst/lst'):
+        mts_name = solrMts.attrib['name'].strip()
+        mts_name = parse_mtsname(mts_name)
+        if mts_name in metrics_list:
+            for solrMtsVal in solrMts.findall('./'):
+                mts_val = solrMtsVal[0].text
+            log_verbose('Core: %s | Solr metric: %s, Value : %s' % (registry, mts_name, mts_val))
+            dispatch_value(registry, mts_name, mts_val, 'counter')
 
 
 # TODO
@@ -143,7 +175,6 @@ def dispatch_core_gauge_metrics(cores, solr_metrics):
 
 def dispatch_gauge_metrics(registry, solr_metrics):
     """Extract required gauge metrics and dispatch to collectd"""
-    # cores = [lst.attrib['name'].strip() for lst in xml.findall('./lst/lst')]
     mts_val = ''
     for solrMts in solr_metrics.findall('./lst/lst/lst'):
         mts_name = solrMts.attrib['name'].strip()
@@ -189,7 +220,7 @@ def read_callback():
     log_verbose('solr plugin: Read callback called')
     metric_registries = ['core', 'node', 'jvm', 'jetty']
     # measure_values = ['counter', 'gauge', 'meter', 'timer']
-    measure_values = ['gauge']
+    measure_values = ['gauge', 'counter']
     load_metrics_list()
     cores = get_cores()
     log_verbose('solr plugin: Cores: ' + ' '.join(cores))
@@ -214,7 +245,7 @@ def read_callback():
                 collectd.error('solr plugin: No info received')
                 continue
             if registry == 'core':
-                dispatch_core_gauge_metrics(cores, solr_metrics)
+                SOLR_CORE_METRIC_FUNC[measure](cores, solr_metrics)
             else:
                 SOLR_METRIC_FUNC[measure](registry, solr_metrics)
 
@@ -224,7 +255,11 @@ SOLR_METRIC_FUNC = {'counter': dispatch_counter_metrics,
                     'meter': dispatch_meter_metrics,
                     'timer': dispatch_timer_metrics,
                     }
-
+SOLR_CORE_METRIC_FUNC = {'counter': dispatch_core_counter_metrics,
+                         'gauge': dispatch_core_gauge_metrics,
+                         'meter': dispatch_meter_metrics,
+                         'timer': dispatch_timer_metrics,
+                         }
 # register callbacks
 collectd.register_config(configure_callback)
 collectd.register_read(read_callback)
