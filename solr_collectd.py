@@ -27,6 +27,7 @@ SOLR_ADMIN = 'admin'
 # Solr Metrics API URL
 SOLR_METRICS_URL = 'http://%s:%s/%s/%s' % (SOLR_HOST, SOLR_PORT, SOLR_URL, SOLR_ADMIN)
 # SOLR_METRICS_URL = 'http://%s:%s/%s/admin/metrics?wt=xml&type=%s&group=%s'
+SOLR_METRICS_FILE = 'solr_metrics_list.txt'
 
 VERBOSE_LOGGING = True
 metrics_list = []
@@ -40,7 +41,7 @@ def log_verbose(msg):
 
 def configure_callback(conf):
     """Receive configuration block"""
-    global SOLR_HOST, SOLR_PORT, SOLR_URL, SOLR_ADMIN_URL
+    global SOLR_HOST, SOLR_PORT, SOLR_URL, SOLR_METRICS_FILE
     log_verbose("Configuring solr plugin with params: %s" % str(conf.children))
     for node in conf.children:
         if node.key == 'Host':
@@ -53,15 +54,17 @@ def configure_callback(conf):
             SOLR_METRICS_FILE = node.values[0]
         else:
             collectd.warning('solr_collectd plugin: Unknown config key: %s.' % node.key)
-    log_verbose('Configured: host=%s, port=%s, url=%s, admin_url=%s' % (SOLR_HOST, SOLR_PORT, SOLR_URL, SOLR_ADMIN_URL))
+    log_verbose('Configured: host=%s, port=%s, url=%s' % (SOLR_HOST, SOLR_PORT, SOLR_URL))
 
 
 def load_metrics_list():
+    global metrics_list
     # Open the file for reading.
     with open(SOLR_METRICS_FILE, 'r') as infile:
         raw_data = infile.read()  # Read the contents of the file into memory.
     # Return a list of the lines, breaking at line boundaries.
     metrics_list = raw_data.splitlines()
+
 
 def get_cores():
     url = 'http://%s:%s/%s/admin/cores?action=status' % (SOLR_HOST, SOLR_PORT, SOLR_URL)
@@ -90,7 +93,7 @@ def dispatch_value(instance, key, value, value_type):
     val.type_instance = key
     val.values = [value]
     # Uncomment below to send data over collectd-python plugin
-    # val.dispatch()
+    val.dispatch()
 
 # TODO
 def dispatch_counter_metrics(core, solr_metrics):
@@ -102,42 +105,53 @@ def dispatch_counter_metrics(core, solr_metrics):
         dispatch_value(core, mts_name, mts_val, 'counter')
 
 
-def dispatch_gauge_metrics(core, solr_metrics):
-    """Extract required gauge metrics and dispatch to collectd"""
-    # cores = [lst.attrib['name'].strip() for lst in xml.findall('./lst/lst')]
-    for solrMts in solr_metrics.findall('./lst/lst/lst'):
-        mts_name = solrMts.attrib['name'].strip()
-        if mts_name in metrics_list:
-            mts_val = solrMts.text
-        log_verbose('Solr metric: %s, Value : %s' % (mts_name, mts_val))
-        dispatch_value(core, mts_name, mts_val, 'gauge')
-
 # TODO
 def dispatch_meter_metrics(core, solr_metrics):
-    """Extract required meter metrics and dispatch to collectd"""
+    """Extract required counter metrics and dispatch to collectd"""
     for solrMts in solr_metrics.findall('./lst/lst/lst/int'):
         mts_name = solrMts.attrib['name'].strip()
         mts_val = solrMts.text
         log_verbose('Solr metric: %s, Value : %s' % (mts_name, mts_val))
-        dispatch_value(core, mts_name, mts_val, 'gauge')
+        dispatch_value(core, mts_name, mts_val, 'counter')
+
 
 # TODO
 def dispatch_timer_metrics(core, solr_metrics):
-    """Extract required timer metrics and dispatch to collectd"""
+    """Extract required counter metrics and dispatch to collectd"""
     for solrMts in solr_metrics.findall('./lst/lst/lst/int'):
         mts_name = solrMts.attrib['name'].strip()
         mts_val = solrMts.text
         log_verbose('Solr metric: %s, Value : %s' % (mts_name, mts_val))
-        dispatch_value(core, mts_name, mts_val, 'gauge')
+        dispatch_value(core, mts_name, mts_val, 'counter')
 
-# TODO
-def dispatch_histogram_metrics(core, solr_metrics):
-    """Extract required histogram metrics and dispatch to collectd"""
-    for solrMts in solr_metrics.findall('./lst/lst/lst/int'):
+
+def dispatch_core_gauge_metrics(cores, solr_metrics):
+    """Extract required gauge metrics and dispatch to collectd"""
+    core = cores[0]
+    mts_val = ''
+    for solrMts in solr_metrics.findall('./lst/lst/lst'):
         mts_name = solrMts.attrib['name'].strip()
-        mts_val = solrMts.text
-        log_verbose('Solr metric: %s, Value : %s' % (mts_name, mts_val))
-        dispatch_value(core, mts_name, mts_val, 'gauge')
+        if mts_name in metrics_list:
+            for solrMtsVal in solrMts.findall('./'):
+                mts_val = solrMtsVal[0].text
+            if mts_val in cores:
+                core = mts_val
+                continue
+            log_verbose('Core: %s | Solr metric: %s, Value : %s' % (core, mts_name, mts_val))
+            dispatch_value(core, mts_name, mts_val, 'gauge')
+
+
+def dispatch_gauge_metrics(registry, solr_metrics):
+    """Extract required gauge metrics and dispatch to collectd"""
+    # cores = [lst.attrib['name'].strip() for lst in xml.findall('./lst/lst')]
+    mts_val = ''
+    for solrMts in solr_metrics.findall('./lst/lst/lst'):
+        mts_name = solrMts.attrib['name'].strip()
+        if mts_name in metrics_list:
+            for solrMtsVal in solrMts.findall('./'):
+                mts_val = solrMtsVal[0].text
+            log_verbose('Core: %s | Solr metric: %s, Value : %s' % (registry, mts_name, mts_val))
+            dispatch_value(registry, mts_name, mts_val, 'gauge')
 
 
 def fetch_solr_stats(measure, registry):
@@ -174,7 +188,8 @@ def fetch_cores_info(core):
 def read_callback():
     log_verbose('solr plugin: Read callback called')
     metric_registries = ['core', 'node', 'jvm', 'jetty']
-    measure_values = ['counter', 'gauge', 'histogram', 'meter', 'timer']
+    # measure_values = ['counter', 'gauge', 'meter', 'timer']
+    measure_values = ['gauge']
     load_metrics_list()
     cores = get_cores()
     log_verbose('solr plugin: Cores: ' + ' '.join(cores))
@@ -183,12 +198,13 @@ def read_callback():
         core_info = fetch_cores_info(core)
         if not core_info:
             collectd.error('solr plugin: No info received')
+
         # parse cores info
         for solrMts in core_info.findall('./lst/lst/lst/int'):
             mts_name = solrMts.attrib['name'].strip()
             if mts_name in metrics_list:
                 mts_val = solrMts.text
-                # log_verbose('Solr metric: %s, Value : %s' % (mts_name, mts_val))
+                log_verbose('Solr metric: %s, Value : %s' % (mts_name, mts_val))
                 dispatch_value(core, mts_name, mts_val, 'gauge')
 
     for registry in metric_registries:
@@ -197,14 +213,16 @@ def read_callback():
             if not solr_metrics:
                 collectd.error('solr plugin: No info received')
                 continue
-            # SOLR_METRIC_FUNC['measure'](cores[0], solr_metrics)
+            if registry == 'core':
+                dispatch_core_gauge_metrics(cores, solr_metrics)
+            else:
+                SOLR_METRIC_FUNC[measure](registry, solr_metrics)
 
 
 SOLR_METRIC_FUNC = {'counter': dispatch_counter_metrics,
                     'gauge': dispatch_gauge_metrics,
                     'meter': dispatch_meter_metrics,
                     'timer': dispatch_timer_metrics,
-                    'histogram': dispatch_histogram_metrics,
                     }
 
 # register callbacks

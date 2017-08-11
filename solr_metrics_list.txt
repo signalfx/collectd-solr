@@ -1,9 +1,9 @@
 numDocs
 maxDoc
-CORE.coreName
+deletedDocs
 CORE.fs.totalSpace
 CORE.fs.usableSpace
-INDEX.size
+INDEX.sizeInBytes
 UPDATE.updateHandler.adds
 UPDATE.updateHandler.errors
 UPDATE.updateHandler.deletesByQuery
