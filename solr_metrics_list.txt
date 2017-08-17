@@ -2,6 +2,7 @@
 numDocs
 maxDoc
 deletedDocs
+indexHeapUsageBytes
 CORE.fs.totalSpace
 CORE.fs.usableSpace
 INDEX.sizeInBytes
