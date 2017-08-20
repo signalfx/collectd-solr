@@ -127,30 +127,13 @@ def load_metrics_list():
 
 def parse_mtsname(mts_name):
     """Remove any slash (/) chars and duplicate attribute names"""
+    mts_name = re.sub(r'(\.http://)', '.', mts_name)
     mts_name = re.sub(r'(\./|/)', '.', mts_name)
     mts_name = re.sub(r'ADMIN\.admin\.', 'ADMIN.', mts_name)
     mts_name = re.sub(r'QUERY\.query\.', 'QUERY.', mts_name)
     mts_name = re.sub(r'UPDATE\.update\.', 'UPDATE.', mts_name)
     mts_name = re.sub(r'REPLICATION\.replication\.', 'REPLICATION.', mts_name)
     return mts_name
-
-
-def get_cores(data):
-    url = '%s/solr/admin/cores?action=status' % data['base_url']
-    cores = []
-    try:
-        log_verbose("Fetching %s" % url)
-        f = urllib2.urlopen(url)
-        xml = etree.fromstring(f.read())
-        cores = [lst.attrib['name'].strip() for lst in xml.findall('./lst/lst')]
-    except urllib2.HTTPError as e:
-        log_verbose('solr_collectd plugin get_cores: can\'t get info, HTTP error: ' + str(e.code))
-        log_verbose(url)
-    except urllib2.URLError as e:
-        log_verbose('solr_collectd plugin get_cores: can\'t get info: ' + str(e.reason))
-        log_verbose(url)
-
-    return cores
 
 
 def dispatch_value(instance, key, value, value_type, dimensions=None):
@@ -180,99 +163,127 @@ def get_dimension_string(dimensions):
     return dim_str
 
 
-def dispatch_core_counter_metrics(cores, solr_metrics):
+def dispatch_core_counter_metrics(plugin_instance, cores_map, solr_metrics, default_dimensions):
     """Extract required gauge metrics and dispatch to collectd"""
-    core = cores[0]
-    mts_val = ''
+    for solrMetric in solr_metrics.findall('./lst/lst'):
+        metric_name = solrMetric.attrib['name'].strip()
+        core = re.sub(r'solr\.core\.', '', metric_name)
+        core = re.sub(r'\.', '_', core)
+        dimensions = prepare_dimensions(default_dimensions, core, cores_map)
+        for solrMts in solrMetric.findall('./lst'):
+            mts_name = solrMts.attrib['name'].strip()
+            mts_name = parse_mtsname(mts_name)
+            if mts_name in metrics_list:
+                mts_val = solrMts[0].text
+                dispatch_value(plugin_instance, mts_name, mts_val, 'counter', dimensions)
+
+
+def dispatch_counter_metrics(plugin_instance, solr_metrics):
+    """Extract required counter metrics and dispatch to collectd"""
     for solrMts in solr_metrics.findall('./lst/lst/lst'):
         mts_name = solrMts.attrib['name'].strip()
         mts_name = parse_mtsname(mts_name)
         if mts_name in metrics_list:
-            for solrMtsVal in solrMts.findall('./'):
-                mts_val = solrMtsVal[0].text
-            if mts_val in cores:
-                core = mts_val
-                continue
-            # log_verbose('Core: %s | Solr metric: %s, Value : %s' % (core, mts_name, mts_val))
-            dispatch_value(core, mts_name, mts_val, 'counter')
-
-
-def dispatch_counter_metrics(registry, solr_metrics):
-    """Extract required counter metrics and dispatch to collectd"""
-    mts_val = ''
-    for solrMts in solr_metrics.findall('./lst/lst/lst'):
-        mts_name = solrMts.attrib['name'].strip()
-        mts_name = parse_mtsname(mts_name)
-        if mts_name in metrics_list:
-            for solrMtsVal in solrMts.findall('./'):
-                mts_val = solrMtsVal[0].text
+            mts_val = solrMts[0].text
             # log_verbose('Core: %s | Solr metric: %s, Value : %s' % (registry, mts_name, mts_val))
-            dispatch_value(registry, mts_name, mts_val, 'counter')
+            dispatch_value(plugin_instance, mts_name, mts_val, 'counter')
 
 
-# TODO
-def dispatch_meter_metrics(core, solr_metrics):
+def dispatch_core_timer_metrics(plugin_instance, cores_map, solr_metrics, default_dimensions):
+    """Extract required timer metrics and dispatch to collectd"""
+    corenum = 0
+    for core in solr_metrics['metrics'][::2]:
+        core = re.sub(r'solr\.core\.', '', core)
+        core = re.sub(r'\.', '_', core)
+        dimensions = prepare_dimensions(default_dimensions, core, cores_map)
+        corenum += 1
+        for mts_name in solr_metrics['metrics'][corenum].keys():
+            amts_name = parse_mtsname(mts_name)
+            if amts_name in metrics_list:
+                for reqTimes in solr_metrics['metrics'][corenum][mts_name].keys():
+                    dmts_name = amts_name + '.' + reqTimes
+                    mts_val = solr_metrics['metrics'][corenum][mts_name][reqTimes]
+                    dispatch_value(plugin_instance, dmts_name, mts_val, 'counter', dimensions)
+        corenum += 1
+
+
+def dispatch_timer_metrics(plugin_instance, solr_metrics):
     """Extract required counter metrics and dispatch to collectd"""
-    for solrMts in solr_metrics.findall('./lst/lst/lst/int'):
-        mts_name = solrMts.attrib['name'].strip()
-        mts_val = solrMts.text
-        log_verbose('Solr metric: %s, Value : %s' % (mts_name, mts_val))
-        dispatch_value(core, mts_name, mts_val, 'counter')
+    for mts_name in solr_metrics['metrics'][1].keys():
+        amts_name = parse_mtsname(mts_name)
+        if amts_name in metrics_list:
+            for reqTimes in solr_metrics['metrics'][1][mts_name].keys():
+                dmts_name = amts_name + '.' + reqTimes
+                mts_val = solr_metrics['metrics'][1][mts_name][reqTimes]
+                dispatch_value(plugin_instance, dmts_name, mts_val, 'counter')
 
 
-# TODO
-def dispatch_timer_metrics(core, solr_metrics):
-    """Extract required counter metrics and dispatch to collectd"""
-    for solrMts in solr_metrics.findall('./lst/lst/lst/int'):
-        mts_name = solrMts.attrib['name'].strip()
-        mts_val = solrMts.text
-        log_verbose('Solr metric: %s, Value : %s' % (mts_name, mts_val))
-        dispatch_value(core, mts_name, mts_val, 'counter')
-
-
-def dispatch_core_gauge_metrics(cores, solr_metrics):
+def dispatch_core_gauge_metrics(plugin_instance, cores_map, solr_metrics, default_dimensions):
     """Extract required gauge metrics and dispatch to collectd"""
-    core = cores[0]
-    mts_val = ''
+    dimensions = {}
     for solrMts in solr_metrics.findall('./lst/lst/lst'):
         mts_name = solrMts.attrib['name'].strip()
+        if mts_name == 'CORE.coreName':
+            core = solrMts[0].text
+            dimensions = prepare_dimensions(default_dimensions, core, cores_map)
+
         if mts_name in metrics_list:
-            for solrMtsVal in solrMts.findall('./'):
-                mts_val = solrMtsVal[0].text
-            if mts_val in cores:
-                core = mts_val
-                continue
+            mts_val = solrMts[0].text
+            # for solrMtsVal in solrMts.findall('./'):
+            #     mts_val = solrMtsVal[0].text
             # log_verbose('Core: %s | Solr metric: %s, Value : %s' % (core, mts_name, mts_val))
-            dispatch_value(core, mts_name, mts_val, 'gauge')
+            dispatch_value(plugin_instance, mts_name, mts_val, 'gauge', dimensions)
 
 
-def dispatch_gauge_metrics(registry, solr_metrics):
+def dispatch_gauge_metrics(plugin_instance, solr_metrics):
     """Extract required gauge metrics and dispatch to collectd"""
-    mts_val = ''
     for solrMts in solr_metrics.findall('./lst/lst/lst'):
         mts_name = solrMts.attrib['name'].strip()
         if mts_name in metrics_list:
-            for solrMtsVal in solrMts.findall('./'):
-                mts_val = solrMtsVal[0].text
+            mts_val = solrMts[0].text
             # log_verbose('Core: %s | Solr metric: %s, Value : %s' % (registry, mts_name, mts_val))
-            dispatch_value(registry, mts_name, mts_val, 'gauge')
+            dispatch_value(plugin_instance, mts_name, mts_val, 'gauge')
+
+
+def get_cores(data):
+    url = '%s/solr/admin/cores?action=status' % data['base_url']
+    cores = []
+    try:
+        log_verbose("Fetching %s" % url)
+        f = urllib2.urlopen(url)
+        xml = etree.fromstring(f.read())
+        cores = [lst.attrib['name'].strip() for lst in xml.findall('./lst/lst')]
+    except urllib2.HTTPError as e:
+        log_verbose('solr_collectd plugin get_cores: can\'t get info, HTTP error: ' + str(e.code))
+        log_verbose(url)
+    except urllib2.URLError as e:
+        log_verbose('solr_collectd plugin get_cores: can\'t get info: ' + str(e.reason))
+        log_verbose(url)
+
+    return cores
 
 
 def fetch_solr_stats(data, measure, registry):
     """Connect to Solr stat page and and return XML object"""
-    # Uncomment below when required to get complete stats
-    # url = 'http://%s:%s/%s/%s/%s' % (SOLR_HOST, SOLR_PORT, SOLR_URL, core, SOLR_ADMIN_URL)
     url = '%s/solr/admin/metrics?wt=xml&type=%s&group=%s' % (data['base_url'], measure, registry)
     xml = None
     try:
         f = urllib2.urlopen(url)
-        # f = open('queues.xml', 'r')
         xml = etree.fromstring(f.read())
     except urllib2.HTTPError as e:
         log_verbose('solr_collectd plugin: can\'t get info, HTTP error: ' + e.code)
     except urllib2.URLError as e:
         log_verbose('solr_collectd plugin: can\'t get info: ' + e.reason)
     return xml
+
+
+def fetch_solr_json_stats(data, measure, registry):
+    """Connect to Solr stat page and and return JSON object"""
+    url = '%s/solr/admin/metrics?wt=json&type=%s&group=%s' % (data['base_url'], measure, registry)
+    f = urllib2.urlopen(url)
+    json_data = json.loads(f.read())
+
+    return json_data
 
 
 def fetch_cores_info(data, core):
@@ -308,14 +319,11 @@ def fetch_collections_info(data):
                 for coreNodes in solrShards[shard]['replicas'].keys():
                     core = solrShards[shard]['replicas'][coreNodes]['core']
                     node = solrShards[shard]['replicas'][coreNodes]['node_name']
-                    # log_verbose('Collection: %s -> Shards: %s -> node: %s -> core: %s' % (
-                    #              collection, shard, node, core))
                     cores_map[core] = {'collection': collection, 'node': node, 'shard': shard}
-
     return cores_map
 
 
-def prepare_dimensions(data, default_dimensions, core, cores_map):
+def prepare_dimensions(default_dimensions, core, cores_map):
     dimensions = {}
     if default_dimensions['cluster'] is False:
         dimensions['core'] = core
@@ -325,7 +333,6 @@ def prepare_dimensions(data, default_dimensions, core, cores_map):
         dimensions['node'] = cores_map[core]['node']
         dimensions['shard'] = cores_map[core]['shard']
         dimensions['core'] = core
-    # return "%s%s" % (data['member_id'], dimensions)
     return dimensions
 
 
@@ -333,7 +340,7 @@ def read_callback(data):
     log_verbose('solr plugin: Read callback called')
     metric_registries = ['core', 'node', 'jvm', 'jetty']
     # measure_values = ['counter', 'gauge', 'meter', 'timer']
-    measure_values = ['gauge', 'counter']
+    measure_values = ['gauge', 'counter', 'timer', 'meter']
     load_metrics_list()
     cores_map = fetch_collections_info(data)
     cores = get_cores(data)
@@ -349,35 +356,41 @@ def read_callback(data):
             collectd.error('solr plugin: No info received')
 
         # parse cores info
+        plugin_instance = 'solr.core'
         for solrMts in core_info.findall('./lst/lst/lst/int'):
             mts_name = solrMts.attrib['name'].strip()
             if mts_name in metrics_list:
                 mts_val = solrMts.text
                 # log_verbose('Solr metric: %s, Value : %s' % (mts_name, mts_val))
-                dimensions = prepare_dimensions(data, default_dimensions, core, cores_map)
-                dispatch_value(core, mts_name, mts_val, 'gauge', dimensions)
+                dimensions = prepare_dimensions(default_dimensions, core, cores_map)
+                dispatch_value(plugin_instance, mts_name, mts_val, 'gauge', dimensions)
 
     for registry in metric_registries:
+        plugin_instance = 'solr.%s' % registry
         for measure in measure_values:
-            solr_metrics = fetch_solr_stats(data, measure, registry)
+            # gauge and counter metrics should be updated to JSON
+            if measure in ('gauge', 'counter'):
+                solr_metrics = fetch_solr_stats(data, measure, registry)
+            else:
+                solr_metrics = fetch_solr_json_stats(data, measure, registry)
             if not solr_metrics:
                 collectd.error('solr plugin: No info received')
                 continue
             if registry == 'core':
-                SOLR_CORE_METRIC_FUNC[measure](cores, solr_metrics)
+                SOLR_CORE_METRIC_FUNC[measure](plugin_instance, cores_map, solr_metrics, default_dimensions)
             else:
-                SOLR_METRIC_FUNC[measure](registry, solr_metrics)
+                SOLR_METRIC_FUNC[measure](plugin_instance, solr_metrics)
 
 
 SOLR_METRIC_FUNC = {'counter': dispatch_counter_metrics,
                     'gauge': dispatch_gauge_metrics,
-                    'meter': dispatch_meter_metrics,
+                    'meter': dispatch_timer_metrics,
                     'timer': dispatch_timer_metrics,
                     }
 SOLR_CORE_METRIC_FUNC = {'counter': dispatch_core_counter_metrics,
                          'gauge': dispatch_core_gauge_metrics,
-                         'meter': dispatch_meter_metrics,
-                         'timer': dispatch_timer_metrics,
+                         'meter': dispatch_core_timer_metrics,
+                         'timer': dispatch_core_timer_metrics,
                          }
 # register callbacks
 collectd.register_config(configure_callback)
