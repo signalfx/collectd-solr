@@ -18,12 +18,10 @@ except ImportError:
         print 'python >= 2.5'
         sys.exit()
 
-SOLR_METRICS_FILE = 'solr_metrics_list.txt'
 DEFAULT_INTERVAL = 10
 DEFAULT_API_TIMEOUT = 60
 PLUGIN_NAME = "solr"
 VERBOSE_LOGGING = True
-metrics_list = []
 
 CORE_SELF_METRICS = [
     "numDocs",
@@ -40,55 +38,73 @@ CORE_GAUGE_METRICS = [
     "UPDATE.updateHandler.errors",
     "UPDATE.updateHandler.deletesById",
     "UPDATE.updateHandler.deletesByQuery",
+    "ADMIN.luke.requestTimes",
+    "ADMIN.ping.requestTimes",
+    "ADMIN.system.requestTimes",
+    "QUERY.browse.requestTimes",
+    "QUERY.get.requestTimes",
+    "QUERY.requestTimes",
+    "QUERY.select.requestTimes",
+    "REPLICATION.requestTimes",
+    "REPLICATION.time",
+    "SEARCHER.new.time",
+    "SEARCHER.new.warmup",
+    "UPDATE.requestTimes",
+    "ADMIN.system.errors",
+    "QUERY.errors",
+    "REPLICATION.errors",
+    "UPDATE.errors",
+    "UPDATE.updateHandler.commits",
+    "UPDATE.updateHandler.cumulativeAdds",
+    "UPDATE.updateHandler.cumulativeDeletesById",
+    "UPDATE.updateHandler.cumulativeDeletesByQuery",
+    "UPDATE.updateHandler.cumulativeErrors"
+]
+
+NODE_GAUGE_METRICS = [
     "CONTAINER.cores.loaded",
+    "CONTAINER.cores.lazy",
     "CONTAINER.fs.totalSpace",
     "CONTAINER.fs.usableSpace",
     "QUERY.httpShardHandler.availableConnections",
     "QUERY.httpShardHandler.maxConnections",
     "UPDATE.updateShardHandler.availableConnections",
-    "UPDATE.updateShardHandler.maxConnections"
+    "UPDATE.updateShardHandler.maxConnections",
+    "ADMIN.collections.requestTimes",
+    "ADMIN.cores.requestTimes",
+    "ADMIN.metrics.requestTimes",
+    "ADMIN.zookeeper.requestTimes",
+    "CONTAINER.threadPool.coreContainerWorkExecutor.duration",
+    "CONTAINER.threadPool.coreLoadExecutor.duration",
+    "QUERY.httpShardHandler.threadPool.httpShardExecutor.duration",
+    "UPDATE.updateShardHandler.threadPool.updateExecutor.duration",
+    "ADMIN.collections.errors",
+    "ADMIN.cores.errors",
+    "ADMIN.metrics.errors",
+    "ADMIN.zookeeper.errors",
+    "CONTAINER.threadPool.coreContainerWorkExecutor.completed",
+    "CONTAINER.threadPool.coreLoadExecutor.completed",
+    "QUERY.httpShardHandler.threadPool.httpShardExecutor.completed",
+    "UPDATE.updateShardHandler.threadPool.updateExecutor.completed"
 ]
 
-NODE_GAUGE_METRICS = [
-    "buffers.direct.capacity",
-    "buffers.direct.count",
-    "buffers.direct.used",
-    "buffers.mapped.capacity",
-    "buffers.mapped.count",
+JVM_GAUGE_METRICS = [
     "buffers.mapped.used",
     "classes.loaded",
-    "memory.heap.committed",
-    "memory.heap.init",
-    "memory.heap.max",
+    "classes.unloaded",
     "memory.heap.used",
-    "memory.non-heap.committed",
-    "memory.non-heap.init",
-    "memory.non-heap.max",
-    "memory.non-heap.usage",
-    "memory.non-heap.used",
-    "memory.total.committed",
-    "memory.total.init",
+    "memory.heap.usage",
     "memory.total.max",
     "memory.total.used",
     "os.AvailableProcessors",
-    "os.CommittedVirtualMemorySize",
     "os.FreePhysicalMemorySize",
     "os.FreeSwapSpaceSize",
-    "os.MaxFileDescriptorCount",
-    "os.OpenFileDescriptorCount",
     "os.ProcessCpuLoad",
-    "os.ProcessCpuTime",
     "os.SystemLoadAverage",
     "os.TotalPhysicalMemorySize",
-    "os.TotalSwapSpaceSize",
     "threads.blocked.count",
     "threads.count",
-    "threads.daemon.count",
-    "threads.deadlock.count",
-    "threads.new.count",
     "threads.runnable.count",
-    "threads.terminated.count",
-    "threads.timed_waiting.count",
     "threads.waiting.count"
 ]
 
@@ -96,9 +112,46 @@ JETTY_GAUGE_METRICS = [
     "server.handler.DefaultHandler.percent-4xx-1m",
     "server.handler.DefaultHandler.percent-5xx-1m",
     "util.thread.QueuedThreadPool.qtp225493257.utilization",
-    "util.thread.QueuedThreadPool.qtp225493257.utilization-max"
+    "util.thread.QueuedThreadPool.qtp225493257.utilization-max",
+    "server.handler.DefaultHandler.connect-requests",
+    "server.handler.DefaultHandler.delete-requests",
+    "server.handler.DefaultHandler.dispatches",
+    "server.handler.DefaultHandler.get-requests",
+    "server.handler.DefaultHandler.post-requests",
+    "server.handler.DefaultHandler.requests",
+    "server.handler.DefaultHandler.2xx-responses",
+    "server.handler.DefaultHandler.4xx-responses"
 ]
 
+CORE_COUNTER_METRICS = [
+    "ADMIN.file.requests",
+    "ADMIN.luke.requests",
+    "ADMIN.mbeans.requests",
+    "ADMIN.ping.requests",
+    "ADMIN.system.requests",
+    "QUERY.browse.requests",
+    "QUERY.get.requests",
+    "QUERY.requests",
+    "QUERY.stream.requests",
+    "REPLICATION.requests",
+    "SEARCHER.new",
+    "SEARCHER.new.errors",
+    "SEARCHER.new.maxReached",
+    "UPDATE.requests"
+]
+
+NODE_COUNTER_METRICS = [
+    "ADMIN.collections.requests",
+    "ADMIN.cores.requests",
+    "ADMIN.metrics.requests",
+    "ADMIN.zookeeper.requests"
+]
+
+JETTY_COUNTER_METRICS = [
+    "server.handler.DefaultHandler.active-dispatches",
+    "server.handler.DefaultHandler.active-requests",
+    "server.handler.DefaultHandler.active-suspended"
+]
 
 def log_verbose(msg):
     if not VERBOSE_LOGGING:
@@ -108,7 +161,6 @@ def log_verbose(msg):
 
 def configure_callback(conf):
     """Receive configuration block"""
-    global SOLR_METRICS_FILE
     plugin_conf = {}
     cluster = 'default'
     interval = DEFAULT_INTERVAL
@@ -139,8 +191,6 @@ def configure_callback(conf):
             include_optional_metrics.add(val.values[0])
         elif val.key == 'ExcludeMetric' and val.values[0]:
             exclude_optional_metrics.add(val.values[0])
-        elif val.key == 'SolrMetrics' and val.values[0]:
-            SOLR_METRICS_FILE = val.values[0]
 
     collectd.debug("Configuration settings:")
 
@@ -188,15 +238,6 @@ def str_to_bool(flag):
     return False
 
 
-def load_metrics_list():
-    global metrics_list
-    # Open the file for reading.
-    with open(SOLR_METRICS_FILE, 'r') as infile:
-        raw_data = infile.read()  # Read the contents of the file into memory.
-    # Return a list of the lines, breaking at line boundaries.
-    metrics_list = raw_data.splitlines()
-
-
 def parse_mtsname(mts_name):
     """Remove any slash (/) chars and duplicate attribute names"""
     mts_name = re.sub(r'(\.http://)', '.', mts_name)
@@ -224,7 +265,7 @@ def dispatch_value(instance, key, value, value_type, dimensions=None):
     val.values = [value]
     val.meta = {'0': True}
 
-    log_verbose('Emitting value: %s' % val)
+    # log_verbose('Emitting value: %s' % val)
     val.dispatch()
 
 
@@ -246,7 +287,7 @@ def dispatch_core_counter_metrics(plugin_instance, cores_map, solr_metrics, defa
         for solrMts in solrMetric.findall('./lst'):
             mts_name = solrMts.attrib['name'].strip()
             mts_name = parse_mtsname(mts_name)
-            if mts_name in metrics_list:
+            if mts_name in CORE_COUNTER_METRICS:
                 mts_val = solrMts[0].text
                 dispatch_value(plugin_instance, mts_name, mts_val, 'counter', dimensions)
 
@@ -256,7 +297,7 @@ def dispatch_counter_metrics(plugin_instance, solr_metrics, cores_map):
     for solrMts in solr_metrics.findall('./lst/lst/lst'):
         mts_name = solrMts.attrib['name'].strip()
         mts_name = parse_mtsname(mts_name)
-        if mts_name in metrics_list:
+        if mts_name in (NODE_COUNTER_METRICS, JETTY_COUNTER_METRICS):
             mts_val = solrMts[0].text
             dispatch_value(plugin_instance, mts_name, mts_val, 'counter')
 
@@ -271,11 +312,11 @@ def dispatch_core_timer_metrics(plugin_instance, cores_map, solr_metrics, defaul
         dimensions = prepare_dimensions(default_dimensions, core, cores_map)
         for mts_name in solr_metrics['metrics'][corenum].keys():
             amts_name = parse_mtsname(mts_name)
-            if amts_name in metrics_list:
+            if amts_name in CORE_GAUGE_METRICS:
                 for reqTimes in solr_metrics['metrics'][corenum][mts_name].keys():
                     dmts_name = amts_name + '.' + reqTimes
                     mts_val = solr_metrics['metrics'][corenum][mts_name][reqTimes]
-                    dispatch_value(plugin_instance, dmts_name, mts_val, 'counter', dimensions)
+                    dispatch_value(plugin_instance, dmts_name, mts_val, 'gauge', dimensions)
         corenum = core if 'error' in cores_map.keys() else corenum + 1
 
 
@@ -284,11 +325,11 @@ def dispatch_timer_metrics(plugin_instance, solr_metrics, cores_map):
     corenum = plugin_instance if 'error' in cores_map.keys() else 1
     for mts_name in solr_metrics['metrics'][corenum].keys():
         amts_name = parse_mtsname(mts_name)
-        if amts_name in metrics_list:
+        if amts_name in (NODE_GAUGE_METRICS, JVM_GAUGE_METRICS, JETTY_GAUGE_METRICS):
             for reqTimes in solr_metrics['metrics'][corenum][mts_name].keys():
                 dmts_name = amts_name + '.' + reqTimes
                 mts_val = solr_metrics['metrics'][corenum][mts_name][reqTimes]
-                dispatch_value(plugin_instance, dmts_name, mts_val, 'counter')
+                dispatch_value(plugin_instance, dmts_name, mts_val, 'gauge')
 
 
 def dispatch_core_gauge_metrics(plugin_instance, cores_map, solr_metrics, default_dimensions):
@@ -309,7 +350,7 @@ def dispatch_gauge_metrics(plugin_instance, solr_metrics, cores_map):
     """Extract required gauge metrics and dispatch to collectd"""
     for solrMts in solr_metrics.findall('./lst/lst/lst'):
         mts_name = solrMts.attrib['name'].strip()
-        if mts_name in metrics_list:
+        if mts_name in (NODE_GAUGE_METRICS, JVM_GAUGE_METRICS, JETTY_GAUGE_METRICS):
             mts_val = solrMts[0].text
             dispatch_value(plugin_instance, mts_name, mts_val, 'gauge')
 
@@ -419,7 +460,6 @@ def read_callback(data):
     metric_registries = ['core', 'node', 'jvm', 'jetty']
     # measure_values = ['counter', 'gauge', 'meter', 'timer']
     measure_values = ['gauge', 'counter', 'timer', 'meter']
-    load_metrics_list()
     cores_map = fetch_collections_info(data)
     cores = get_cores(data)
 
