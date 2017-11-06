@@ -153,6 +153,7 @@ JETTY_COUNTER_METRICS = [
     "server.handler.DefaultHandler.active-suspended"
 ]
 
+
 def log_verbose(msg):
     if not VERBOSE_LOGGING:
         return
@@ -297,7 +298,7 @@ def dispatch_counter_metrics(plugin_instance, solr_metrics, cores_map):
     for solrMts in solr_metrics.findall('./lst/lst/lst'):
         mts_name = solrMts.attrib['name'].strip()
         mts_name = parse_mtsname(mts_name)
-        if mts_name in (NODE_COUNTER_METRICS, JETTY_COUNTER_METRICS):
+        if any(mts_name in l for l in (NODE_COUNTER_METRICS, JETTY_COUNTER_METRICS)):
             mts_val = solrMts[0].text
             dispatch_value(plugin_instance, mts_name, mts_val, 'counter')
 
@@ -325,7 +326,7 @@ def dispatch_timer_metrics(plugin_instance, solr_metrics, cores_map):
     corenum = plugin_instance if 'error' in cores_map.keys() else 1
     for mts_name in solr_metrics['metrics'][corenum].keys():
         amts_name = parse_mtsname(mts_name)
-        if amts_name in (NODE_GAUGE_METRICS, JVM_GAUGE_METRICS, JETTY_GAUGE_METRICS):
+        if any(amts_name in l for l in (NODE_GAUGE_METRICS, JVM_GAUGE_METRICS, JETTY_GAUGE_METRICS)):
             for reqTimes in solr_metrics['metrics'][corenum][mts_name].keys():
                 dmts_name = amts_name + '.' + reqTimes
                 mts_val = solr_metrics['metrics'][corenum][mts_name][reqTimes]
@@ -350,7 +351,7 @@ def dispatch_gauge_metrics(plugin_instance, solr_metrics, cores_map):
     """Extract required gauge metrics and dispatch to collectd"""
     for solrMts in solr_metrics.findall('./lst/lst/lst'):
         mts_name = solrMts.attrib['name'].strip()
-        if mts_name in (NODE_GAUGE_METRICS, JVM_GAUGE_METRICS, JETTY_GAUGE_METRICS):
+        if any(mts_name in l for l in (NODE_GAUGE_METRICS, JVM_GAUGE_METRICS, JETTY_GAUGE_METRICS)):
             mts_val = solrMts[0].text
             dispatch_value(plugin_instance, mts_name, mts_val, 'gauge')
 
@@ -378,6 +379,7 @@ def fetch_solr_stats(data, measure, registry):
     url = '%s/solr/admin/metrics?wt=xml&type=%s&group=%s' % (data['base_url'], measure, registry)
     xml = None
     try:
+        log_verbose("Fetching %s" % url)
         f = urllib2.urlopen(url)
         xml = etree.fromstring(f.read())
     except urllib2.HTTPError as e:
@@ -390,6 +392,7 @@ def fetch_solr_stats(data, measure, registry):
 def fetch_solr_json_stats(data, measure, registry):
     """Connect to Solr stat page and and return JSON object"""
     url = '%s/solr/admin/metrics?wt=json&type=%s&group=%s' % (data['base_url'], measure, registry)
+    log_verbose("Fetching %s" % url)
     f = urllib2.urlopen(url)
     json_data = json.loads(f.read())
 
@@ -401,6 +404,7 @@ def fetch_cores_info(data, core):
     url = '%s/solr/admin/cores?action=status&core=%s' % (data['base_url'], core)
     xml = None
     try:
+        log_verbose("Fetching %s" % url)
         f = urllib2.urlopen(url)
         xml = etree.fromstring(f.read())
     except urllib2.HTTPError as e:
@@ -416,6 +420,7 @@ def fetch_collections_info(data):
     get_data = None
     cores_map = {}
     try:
+        log_verbose("Fetching %s" % url)
         f = urllib2.urlopen(url)
         get_data = json.loads(f.read())
     except urllib2.HTTPError as e:
