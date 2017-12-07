@@ -6,147 +6,90 @@
 import sys
 import re
 import urllib2
+import collections
 import collectd
 import json
-
-try:
-    import xml.etree.cElementTree as etree
-except ImportError:
-    try:
-        import xml.etree.ElementTree as etree
-    except ImportError:
-        print 'python >= 2.5'
-        sys.exit()
 
 DEFAULT_INTERVAL = 10
 DEFAULT_API_TIMEOUT = 60
 PLUGIN_NAME = 'solr'
 VERBOSE_LOGGING = True
 
-CORE_METRICS = [
-    "numDocs",
-    "maxDoc",
-    "deletedDocs",
-    "indexHeapUsageBytes"
-]
+Metric = collections.namedtuple('Metric', ('name', 'type'))
 
-CORE_GAUGE_METRICS = [
-    "CORE.fs.totalSpace",
-    "CORE.fs.usableSpace",
-    "INDEX.sizeInBytes",
-    "ADMIN.luke.requestTimes",
-    "ADMIN.system.requestTimes",
-    "QUERY.browse.requestTimes",
-    "QUERY.get.requestTimes",
-    "QUERY.requestTimes",
-    "QUERY.select.requestTimes",
-    "REPLICATION.requestTimes",
-    "REPLICATION.time",
-    "SEARCHER.new.time",
-    "SEARCHER.new.warmup",
-    "UPDATE.requestTimes",
-    "ADMIN.system.errors",
-    "QUERY.errors",
-    "REPLICATION.errors",
-    "UPDATE.errors",
-    "UPDATE.updateHandler.commits",
-    "UPDATE.updateHandler.cumulativeAdds",
-    "UPDATE.updateHandler.cumulativeDeletesById",
-    "UPDATE.updateHandler.cumulativeDeletesByQuery",
-    "UPDATE.updateHandler.cumulativeErrors"
-]
+CORE_METRICS = {
+    'SEARCHER.searcher.deletedDocs':
+        Metric('solr.core_deleted_docs', 'counter'),
+    'SEARCHER.searcher.indexVersion':
+        Metric('solr.core_indexed_docs', 'counter'),
+    'SEARCHER.searcher.numDocs':
+        Metric('solr.core_num_docs', 'counter'),
+    'CORE.fs.totalSpace':
+        Metric('solr.core_totalspace', 'gauge'),
+    'CORE.fs.usableSpace':
+        Metric('solr.core_usablespace', 'gauge'),
+    'INDEX.sizeInBytes':
+        Metric('solr.core_index_size', 'gauge'),
+    'CACHE.searcher.documentCache.cumulative_hitratio':
+        Metric('solr.document_cache_cumulative_hitratio', 'gauge'),
+    'CACHE.searcher.fieldValueCache.cumulative_hitratio':
+        Metric('solr.field_value_cache_cumulative_hitratio', 'gauge'),
+    'CACHE.searcher.queryResultCache.cumulative_hitratio':
+        Metric('solr.query_result_cache_cumulative_hitratio', 'gauge')
+}
 
-NODE_GAUGE_METRICS = [
-    "CONTAINER.cores.loaded",
-    "CONTAINER.cores.lazy",
-    "CONTAINER.fs.totalSpace",
-    "CONTAINER.fs.usableSpace",
-    "QUERY.httpShardHandler.availableConnections",
-    "QUERY.httpShardHandler.maxConnections",
-    "UPDATE.updateShardHandler.availableConnections",
-    "UPDATE.updateShardHandler.maxConnections",
-    "ADMIN.collections.requestTimes",
-    "ADMIN.cores.requestTimes",
-    "ADMIN.metrics.requestTimes",
-    "ADMIN.zookeeper.requestTimes",
-    "CONTAINER.threadPool.coreContainerWorkExecutor.duration",
-    "CONTAINER.threadPool.coreLoadExecutor.duration",
-    "QUERY.httpShardHandler.threadPool.httpShardExecutor.duration",
-    "UPDATE.updateShardHandler.threadPool.updateExecutor.duration",
-    "ADMIN.collections.errors",
-    "ADMIN.cores.errors",
-    "ADMIN.metrics.errors",
-    "ADMIN.zookeeper.errors",
-    "CONTAINER.threadPool.coreContainerWorkExecutor.completed",
-    "CONTAINER.threadPool.coreLoadExecutor.completed",
-    "QUERY.httpShardHandler.threadPool.httpShardExecutor.completed",
-    "UPDATE.updateShardHandler.threadPool.updateExecutor.completed"
-]
-
-JVM_GAUGE_METRICS = [
-    "buffers.mapped.used",
-    "classes.loaded",
-    "classes.unloaded",
-    "memory.heap.used",
-    "memory.heap.usage",
-    "memory.total.max",
-    "memory.total.used",
-    "os.AvailableProcessors",
-    "os.FreePhysicalMemorySize",
-    "os.FreeSwapSpaceSize",
-    "os.ProcessCpuLoad",
-    "os.SystemLoadAverage",
-    "os.TotalPhysicalMemorySize",
-    "threads.blocked.count",
-    "threads.count",
-    "threads.runnable.count",
-    "threads.waiting.count"
-]
-
-JETTY_GAUGE_METRICS = [
-    "server.handler.DefaultHandler.percent-4xx-1m",
-    "server.handler.DefaultHandler.percent-5xx-1m",
-    "util.thread.QueuedThreadPool.qtp225493257.utilization",
-    "util.thread.QueuedThreadPool.qtp225493257.utilization-max",
-    "server.handler.DefaultHandler.connect-requests",
-    "server.handler.DefaultHandler.delete-requests",
-    "server.handler.DefaultHandler.dispatches",
-    "server.handler.DefaultHandler.get-requests",
-    "server.handler.DefaultHandler.post-requests",
-    "server.handler.DefaultHandler.requests",
-    "server.handler.DefaultHandler.2xx-responses",
-    "server.handler.DefaultHandler.4xx-responses"
-]
-
-CORE_COUNTER_METRICS = [
-    "ADMIN.file.requests",
-    "ADMIN.luke.requests",
-    "ADMIN.mbeans.requests",
-    "ADMIN.ping.requests",
-    "ADMIN.system.requests",
-    "QUERY.browse.requests",
-    "QUERY.get.requests",
-    "QUERY.requests",
-    "QUERY.stream.requests",
-    "REPLICATION.requests",
-    "SEARCHER.new",
-    "SEARCHER.new.errors",
-    "SEARCHER.new.maxReached",
-    "UPDATE.requests"
-]
-
-NODE_COUNTER_METRICS = [
-    "ADMIN.collections.requests",
-    "ADMIN.cores.requests",
-    "ADMIN.metrics.requests",
-    "ADMIN.zookeeper.requests"
-]
-
-JETTY_COUNTER_METRICS = [
-    "server.handler.DefaultHandler.active-dispatches",
-    "server.handler.DefaultHandler.active-requests",
-    "server.handler.DefaultHandler.active-suspended"
-]
+NODE_METRICS = {
+    'node': {
+        'ADMIN./admin/collections.requestTimes.mean_ms':
+            Metric('solr.node.collections.requestTimes', 'gauge'),
+        'ADMIN./admin/cores.requestTimes.mean_ms':
+            Metric('solr.node.cores.requestTimes', 'gauge'),
+        'ADMIN./admin/zookeeper.requestTimes.mean_ms':
+            Metric('solr.node.zookeeper.requestTimes', 'gauge'),
+    },
+    'jetty': {
+        'DefaultHandler.2xx-responses.count':
+            Metric('solr.http_2xx_responses', 'counter'),
+        'DefaultHandler.4xx-responses.count':
+            Metric('solr.http_4xx_responses', 'counter'),
+        'DefaultHandler.requests.count':
+            Metric('solr.http_requests', 'counter'),
+        'DefaultHandler.requests.mean_ms':
+            Metric('solr.jetty_request_latency', 'gauge')
+    },
+    'jvm': {
+        'memory.heap.usage':
+            Metric('solr.jvm_heap_usage', 'gauge'),
+        'buffers.direct.MemoryUsed':
+            Metric('solr.jvm_direct_memory_used', 'gauge'),
+        'buffers.direct.TotalCapacity':
+            Metric('solr.jvm_direct_memory_capacity', 'gauge'),
+        'memory.total.max':
+            Metric('solr.jvm_total_memory', 'gauge'),
+        'memory.total.used':
+            Metric('solr.jvm_total_memory_used', 'gauge'),
+        'memory.pools.Metaspace.usage':
+            Metric('solr.jvm.memory.pools.Metaspace.usage', 'gauge'),
+        'memory.pools.Par-Eden-Space.usage':
+            Metric('solr.jvm.memory.pools.Par-Eden-Space.usage', 'gauge'),
+        'memory.pools.Par-Survivor-Space.usage':
+            Metric('solr.jvm.memory.pools.Par-Survivor-Space.usage', 'gauge'),
+        'memory.pools.Code-Cache.usage':
+            Metric('solr.jvm.memory.pools.Code-Cache.usage', 'gauge'),
+        'gc.ConcurrentMarkSweep.count':
+            Metric('solr.jvm_gc_cms_count', 'gauge'),
+        'gc.ConcurrentMarkSweep.time':
+            Metric('solr.jvm_gc_cms_time', 'gauge'),
+        'gc.ParNew.count':
+            Metric('solr.jvm_gc_parnew_count', 'gauge'),
+        'gc.ParNew.time':
+            Metric('solr.jvm_gc_parnew_time', 'gauge'),
+        'threads.count':
+            Metric('solr.jvm_active_threads', 'gauge'),
+        'threads.runnable.count':
+            Metric('solr.jvm_runnable_threads', 'gauge')
+    }
+}
 
 
 def log_verbose(msg):
@@ -207,6 +150,7 @@ def configure_callback(conf):
         'cluster': cluster,
         'interval': interval,
         'base_url': base_url,
+        'port': plugin_conf['Port'],
         'http_timeout': http_timeout,
         'custom_dimensions': custom_dimensions,
         'enhanced_metrics': enhanced_metrics,
@@ -217,9 +161,23 @@ def configure_callback(conf):
     collectd.debug("module_config: (%s)" % str(module_config))
 
     collectd.register_read(
-        read_callback,
+        read_metrics,
         data=module_config,
         name=module_config['member_id'])
+
+
+def read_metrics(data):
+    log_verbose('solr plugin: Read callback called')
+    solrCloud = fetch_collections_info(data)
+    default_dimensions = data['custom_dimensions']
+
+    response = fetch_solr_stats(data)
+    if response is None:
+        return
+
+    solr_metrics = flatten_dict(response)
+    dispatch_core_stats(data, solr_metrics, default_dimensions, solrCloud)
+    dispatch_node_stats(data, solr_metrics, default_dimensions, solrCloud)
 
 
 def str_to_bool(flag):
@@ -234,16 +192,9 @@ def str_to_bool(flag):
     return False
 
 
-def parse_mtsname(mts_name):
-    """Remove any slash (/) chars and duplicate attribute names"""
-    mts_name = re.sub(r'(\.http://)', '.', mts_name)
-    mts_name = re.sub(r'(\./|/)', '.', mts_name)
-    mts_name = re.sub(r'ADMIN\.admin\.', 'ADMIN.', mts_name)
-    mts_name = re.sub(r'QUERY\.query\.', 'QUERY.', mts_name)
-    mts_name = re.sub(r'UPDATE\.update\.', 'UPDATE.', mts_name)
-    mts_name = re.sub(r'REPLICATION\.replication\.', 'REPLICATION.', mts_name)
-    mts_name = re.sub(r'org\.eclipse\.jetty\.', '', mts_name)
-    return mts_name
+def parse_corename(core):
+    core = re.sub(r'_', '.', core)
+    return core
 
 
 def dispatch_value(instance, key, value, value_type, dimensions=None):
@@ -261,7 +212,7 @@ def dispatch_value(instance, key, value, value_type, dimensions=None):
     val.values = [value]
     val.meta = {'0': True}
 
-    # log_verbose('Emitting value: %s' % val)
+    log_verbose('Emitting value: %s' % val)
     val.dispatch()
 
 
@@ -273,92 +224,28 @@ def get_dimension_string(dimensions):
     return dim_str
 
 
-def dispatch_core_counter_metrics(plugin_instance, solrCloud, solr_metrics, default_dimensions):
-    """Extract required gauge metrics and dispatch to collectd"""
-    for solrMetric in solr_metrics.findall('./lst/lst'):
-        metric_name = solrMetric.attrib['name'].strip()
-        core = re.sub(r'solr\.core\.', '', metric_name)
-        core = re.sub(r'\.', '_', core)
-        dimensions = prepare_dimensions(default_dimensions, core, solrCloud)
-        for solrMts in solrMetric.findall('./lst'):
-            mts_name = solrMts.attrib['name'].strip()
-            mts_name = parse_mtsname(mts_name)
-            if mts_name in CORE_COUNTER_METRICS:
-                mts_val = solrMts[0].text
-                dispatch_value(plugin_instance, mts_name, mts_val, 'counter', dimensions)
+def prepare_dimensions(default_dimensions, core, solrCloud=None, collection=None):
+    dimensions = default_dimensions
 
+    if 'error' in solrCloud.keys():
+        dimensions['core'] = core
+    else:
+        dimensions['collection'] = collection
+        dimensions['node'] = solrCloud[collection]['node']
+        dimensions['shard'] = solrCloud[collection]['shard']
+        dimensions['core'] = solrCloud[collection]['core']
 
-def dispatch_counter_metrics(plugin_instance, solr_metrics, solrCloud):
-    """Extract required counter metrics and dispatch to collectd"""
-    for solrMts in solr_metrics.findall('./lst/lst/lst'):
-        mts_name = solrMts.attrib['name'].strip()
-        mts_name = parse_mtsname(mts_name)
-        if any(mts_name in l for l in (NODE_COUNTER_METRICS, JETTY_COUNTER_METRICS)):
-            mts_val = solrMts[0].text
-            dispatch_value(plugin_instance, mts_name, mts_val, 'counter')
-
-
-def dispatch_core_timer_metrics(plugin_instance, solrCloud, solr_metrics, default_dimensions):
-    """Extract required timer metrics and dispatch to collectd"""
-    corenum = None if 'error' in solrCloud.keys() else 0
-    for core in solr_metrics['metrics'].keys() if 'error' in solrCloud.keys() else solr_metrics['metrics'][::2]:
-        corenum = core if 'error' in solrCloud.keys() else corenum + 1
-        core = re.sub(r'solr\.core\.', '', core)
-        core = re.sub(r'\.', '_', core)
-        dimensions = prepare_dimensions(default_dimensions, core, solrCloud)
-        for mts_name in solr_metrics['metrics'][corenum].keys():
-            amts_name = parse_mtsname(mts_name)
-            if amts_name in CORE_GAUGE_METRICS:
-                for reqTimes in solr_metrics['metrics'][corenum][mts_name].keys():
-                    dmts_name = amts_name + '.' + reqTimes
-                    mts_val = solr_metrics['metrics'][corenum][mts_name][reqTimes]
-                    dispatch_value(plugin_instance, dmts_name, mts_val, 'gauge', dimensions)
-        corenum = core if 'error' in solrCloud.keys() else corenum + 1
-
-
-def dispatch_timer_metrics(plugin_instance, solr_metrics, solrCloud):
-    """Extract required counter metrics and dispatch to collectd"""
-    corenum = plugin_instance if 'error' in solrCloud.keys() else 1
-    for mts_name in solr_metrics['metrics'][corenum].keys():
-        amts_name = parse_mtsname(mts_name)
-        if any(amts_name in l for l in (NODE_GAUGE_METRICS, JVM_GAUGE_METRICS, JETTY_GAUGE_METRICS)):
-            for reqTimes in solr_metrics['metrics'][corenum][mts_name].keys():
-                dmts_name = amts_name + '.' + reqTimes
-                mts_val = solr_metrics['metrics'][corenum][mts_name][reqTimes]
-                dispatch_value(plugin_instance, dmts_name, mts_val, 'gauge')
-
-
-def dispatch_core_gauge_metrics(plugin_instance, solrCloud, solr_metrics, default_dimensions):
-    """Extract required gauge metrics and dispatch to collectd"""
-    dimensions = {}
-    for solrMts in solr_metrics.findall('./lst/lst/lst'):
-        mts_name = solrMts.attrib['name'].strip()
-        if mts_name == 'CORE.coreName':
-            core = solrMts[0].text
-            dimensions = prepare_dimensions(default_dimensions, core, solrCloud)
-
-        if mts_name in CORE_GAUGE_METRICS:
-            mts_val = solrMts[0].text
-            dispatch_value(plugin_instance, mts_name, mts_val, 'gauge', dimensions)
-
-
-def dispatch_gauge_metrics(plugin_instance, solr_metrics, solrCloud):
-    """Extract required gauge metrics and dispatch to collectd"""
-    for solrMts in solr_metrics.findall('./lst/lst/lst'):
-        mts_name = solrMts.attrib['name'].strip()
-        if any(mts_name in l for l in (NODE_GAUGE_METRICS, JVM_GAUGE_METRICS, JETTY_GAUGE_METRICS)):
-            mts_val = solrMts[0].text
-            dispatch_value(plugin_instance, mts_name, mts_val, 'gauge')
+    return dimensions
 
 
 def get_cores(data):
-    url = '%s/admin/cores?action=status' % data['base_url']
+    url = '%s/admin/cores?action=status&wt=json' % data['base_url']
     cores = []
     try:
         log_verbose("Fetching %s" % url)
         f = urllib2.urlopen(url)
-        xml = etree.fromstring(f.read())
-        cores = [lst.attrib['name'].strip() for lst in xml.findall('./lst/lst')]
+        json_data = json.loads(f.read())
+        cores = json_data['status'].keys()
     except urllib2.HTTPError as e:
         log_verbose('solr_collectd plugin get_cores: can\'t get info, HTTP error: ' + str(e.code))
         log_verbose(url)
@@ -369,44 +256,26 @@ def get_cores(data):
     return cores
 
 
-def fetch_solr_stats(data, measure, registry):
-    """Connect to Solr stat page and and return XML object"""
-    url = '%s/admin/metrics?wt=xml&type=%s&group=%s' % (data['base_url'], measure, registry)
-    xml = None
-    try:
-        log_verbose("Fetching %s" % url)
-        f = urllib2.urlopen(url)
-        xml = etree.fromstring(f.read())
-    except urllib2.HTTPError as e:
-        log_verbose('solr_collectd plugin: can\'t get info, HTTP error: ' + e.code)
-    except urllib2.URLError as e:
-        log_verbose('solr_collectd plugin: can\'t get info: ' + e.reason)
-    return xml
-
-
-def fetch_solr_json_stats(data, measure, registry):
+def fetch_solr_stats(data):
     """Connect to Solr stat page and and return JSON object"""
-    url = '%s/admin/metrics?wt=json&type=%s&group=%s' % (data['base_url'], measure, registry)
-    log_verbose("Fetching %s" % url)
-    f = urllib2.urlopen(url)
-    json_data = json.loads(f.read())
+    url = '%s/admin/metrics?wt=json&type=all&group=all' % (data['base_url'])
 
-    return json_data
-
-
-def fetch_cores_info(data, core):
-    """Connect to Solr stat page and and return XML object"""
-    url = '%s/admin/cores?action=status&core=%s' % (data['base_url'], core)
-    xml = None
+    if data['cluster'] is not None and 'leader' not in data.keys():
+        log_verbose('Ignore metrics for solrCloud replica node %s' % data['base_url'])
+        return None
     try:
         log_verbose("Fetching %s" % url)
         f = urllib2.urlopen(url)
-        xml = etree.fromstring(f.read())
+        json_data = json.loads(f.read())
+        return json_data
     except urllib2.HTTPError as e:
-        log_verbose('solr_collectd plugin: can\'t get info, HTTP error: ' + e.code)
+        log_verbose('solr_collectd plugin get_cores: can\'t get info, HTTP error: ' + str(e.code))
+        log_verbose(url)
     except urllib2.URLError as e:
-        log_verbose('solr_collectd plugin: can\'t get info: ' + e.reason)
-    return xml
+        log_verbose('solr_collectd plugin get_cores: can\'t get info: ' + str(e.reason))
+        log_verbose(url)
+
+    return None
 
 
 def fetch_collections_info(data):
@@ -431,99 +300,114 @@ def fetch_collections_info(data):
     elif 'cluster' in get_data.keys():
         log_verbose('Solr running in SolrCloud mode')
         solrCollections = get_data['cluster']['collections'].keys()
+        leader_url = 'http://172.31.45.252:' + data['port'] + '/solr'
+        # solrCloud['leader'] = False
 
         for collection in solrCollections:
             solrShards = get_data['cluster']['collections'][collection]['shards']
             for shard in solrShards.keys():
                 for coreNodes in solrShards[shard]['replicas'].keys():
                     coreNode = solrShards[shard]['replicas'][coreNodes]
-                    if 'leader' in coreNode.keys() and coreNode['base_url'] == data['base_url']:
-                        solrCloud['core'] = coreNode['core']
-                        solrCloud['node'] = coreNode['node_name']
-                        solrCloud['leader'] = coreNode['leader']
-                        solrCloud['shard'] = shard
-                        solrCloud['collection'] = collection
+                    if 'leader' in coreNode.keys() and coreNode['base_url'] == leader_url:
+                        # and coreNode['base_url'] == data['base_url']
+                        solrCloud[collection] = {}
+                        log_verbose('leader node %s' % coreNode['node_name'])
+                        data['leader'] = True
+                        solrCloud[collection]['leader'] = coreNode['leader']
+                        solrCloud[collection]['core'] = coreNode['core']
+                        solrCloud[collection]['node'] = coreNode['node_name']
+                        solrCloud[collection]['shard'] = shard
+                        solrCloud[collection]['collection'] = collection
     return solrCloud
 
 
-def prepare_dimensions(default_dimensions, core, solrCloud=None):
-    dimensions = {}
-    if default_dimensions['cluster'] is False:
-        dimensions['core'] = core
-    else:
-        dimensions['collection'] = solrCloud['collection']
-        dimensions['node'] = solrCloud['node']
-        dimensions['shard'] = solrCloud['shard']
-        dimensions['core'] = core
-        dimensions['cluster'] = default_dimensions['cluster']
-    return dimensions
+def flatten_dict(d, result=None):
+    """
+    flatten_dict method will take a nested 'dict' as a parameter and
+    converts it to a single nested dict by merging all the nested keys
+    to a single key with '.' using recursion.
+    """
+    if result is None:
+        result = {}
+    for key in d:
+        value = d[key]
+        if isinstance(value, dict):
+            value1 = {}
+            for keyIn in value:
+                value1[".".join([key, keyIn])] = value[keyIn]
+            flatten_dict(value1, result)
+        elif isinstance(value, (list, tuple)):
+            for indexB, element in enumerate(value):
+                if isinstance(element, dict):
+                    value1 = {}
+                    index = 0
+                    for keyIn in element:
+                        newkey = ".".join([key, keyIn])
+                        value1[newkey] = value[indexB][keyIn]
+                        index += 1
+                    for keyA in value1:
+                        flatten_dict(value1, result)
+                elif isinstance(element, list):
+                    if len(element) == 2:
+                        keyB = ".".join([key, str(element[0])])
+                        keyB = keyB.replace(".value", "")
+                        result[keyB] = element[1]
+        else:
+            key = key.replace(".value", "")
+            result[key] = value
+    return result
 
 
-def dispatch_core_metrics(data, core, default_dimensions, solrCloud=None):
-    core_info = fetch_cores_info(data, core)
-    if not core_info:
-        collectd.error('solr plugin: No info received')
+def dispatch_core_stats(data, solr_metrics, default_dimensions, solrCloud):
+    plugin_instance = data['member_id']
+    cores = get_cores(data) if 'error' in solrCloud.keys() else None
 
-    # parse cores info
-    plugin_instance = 'solr.core'
-    for solrMts in core_info.findall('./lst/lst/lst/int'):
-        mts_name = solrMts.attrib['name'].strip()
-        if mts_name in CORE_METRICS:
-            mts_val = solrMts.text
-            # log_verbose('Solr metric: %s, Value : %s' % (mts_name, mts_val))
-            dimensions = prepare_dimensions(default_dimensions, core, solrCloud)
-            dispatch_value(plugin_instance, mts_name, mts_val, 'gauge', dimensions)
-
-
-def dispatch_standalone_metrics(data, default_dimensions):
-    cores = get_cores(data)
-    for core in cores:
-        dispatch_core_metrics(data, core, default_dimensions)
+    for key in solrCloud.keys() if cores is None else cores:
+        core = parse_corename(solrCloud[key]['core']) if cores is None else key
+        log_verbose('collection: {0}'.format(key))
+        for cmetric in CORE_METRICS.keys():
+            metric = "metrics.solr.core.{0}.{1}".format(core, cmetric)
+            if metric in solr_metrics.keys():
+                dimensions = prepare_dimensions(default_dimensions, core, solrCloud, key)
+                dispatch_value(
+                    plugin_instance,
+                    CORE_METRICS[cmetric].name,
+                    solr_metrics[metric],
+                    CORE_METRICS[cmetric].type,
+                    dimensions
+                )
 
 
-def dispatch_cloud_metrics(data, default_dimensions, solrCloud):
-    metric_registries = ['core', 'node', 'jvm', 'jetty']
-    measure_values = ['gauge', 'counter', 'timer', 'meter']
-    for registry in metric_registries:
-        plugin_instance = 'solr.%s' % registry
-        for measure in measure_values:
-            # gauge and counter metrics should be updated to JSON
-            if measure in ('gauge', 'counter'):
-                solr_metrics = fetch_solr_stats(data, measure, registry)
+def dispatch_node_stats(data, solr_metrics, default_dimensions, solrCloud):
+    plugin_instance = data['member_id']
+    core = None
+    collection = None
+
+    if 'error' not in solrCloud.keys():
+        for key in solrCloud.keys():
+            if data['member_id']+'_solr' == solrCloud[key]['node']:
+                collection = key
+                core = solrCloud[key]['core']
+
+    for registry in ('node', 'jetty', 'jvm'):
+        for nmetric in NODE_METRICS[registry].keys():
+            if registry == 'jetty':
+                metric = "metrics.solr.jetty.org.eclipse.jetty.server.handler.{0}".format(nmetric)
             else:
-                solr_metrics = fetch_solr_json_stats(data, measure, registry)
-            if not solr_metrics:
-                collectd.error('solr plugin: No info received')
-                continue
-            if registry == 'core':
-                SOLR_CORE_METRIC_FUNC[measure](plugin_instance, solrCloud, solr_metrics, default_dimensions)
-            else:
-                SOLR_METRIC_FUNC[measure](plugin_instance, solr_metrics, solrCloud)
+                metric = "metrics.solr.{0}.{1}".format(registry, nmetric)
+            if metric in solr_metrics.keys():
+                dimensions = prepare_dimensions(default_dimensions, core, solrCloud, collection)
+                dispatch_value(
+                    plugin_instance,
+                    NODE_METRICS[registry][nmetric].name,
+                    solr_metrics[metric],
+                    NODE_METRICS[registry][nmetric].type,
+                    dimensions
+                )
 
 
-def read_callback(data):
-    log_verbose('solr plugin: Read callback called')
-    solrCloud = fetch_collections_info(data)
-    default_dimensions = data['custom_dimensions']
-
-    if 'error' in solrCloud.keys():
-        dispatch_standalone_metrics(data, default_dimensions)
-    elif 'leader' in solrCloud.keys():
-        dispatch_core_metrics(data, solrCloud['core'], default_dimensions, solrCloud)
-        dispatch_cloud_metrics(data, default_dimensions, solrCloud)
-    else:
-        log_verbose('Ignore metrics for node %s' % data['base_url'])
-
-
-SOLR_METRIC_FUNC = {'counter': dispatch_counter_metrics,
-                    'gauge': dispatch_gauge_metrics,
-                    'meter': dispatch_timer_metrics,
-                    'timer': dispatch_timer_metrics,
-                    }
-SOLR_CORE_METRIC_FUNC = {'counter': dispatch_core_counter_metrics,
-                         'gauge': dispatch_core_gauge_metrics,
-                         'meter': dispatch_core_timer_metrics,
-                         'timer': dispatch_core_timer_metrics,
-                         }
-# register callbacks
-collectd.register_config(configure_callback)
+if __name__ == "__main__":
+    # run standalone
+    pass
+else:
+    collectd.register_config(configure_callback)
