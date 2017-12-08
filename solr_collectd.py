@@ -131,26 +131,25 @@ def configure_callback(conf):
         elif val.key == 'ExcludeMetric' and val.values[0]:
             exclude_optional_metrics.add(val.values[0])
 
-    collectd.debug("Configuration settings:")
+    collectd.info("Configuration settings:")
 
     for key in required_keys:
         try:
             val = plugin_conf[key]
-            collectd.debug("%s : %s" % (key, val))
+            collectd.info("%s : %s" % (key, val))
         except KeyError:
             raise KeyError("Missing required config setting: %s" % key)
 
-    base_url = ("http://%s:%s/solr" % (plugin_conf['Host'], plugin_conf['Port']))
+    base_url = ("http://{0}:{1}/solr".format(plugin_conf['Host'], plugin_conf['Port']))
 
     module_config = {
         'state': None,
-        'member_id': ("%s:%s" % (
+        'member_id': ("{0}:{1}".format(
             plugin_conf['Host'], plugin_conf['Port'])),
         'plugin_conf': plugin_conf,
         'cluster': cluster,
         'interval': interval,
         'base_url': base_url,
-        'port': plugin_conf['Port'],
         'http_timeout': http_timeout,
         'custom_dimensions': custom_dimensions,
         'enhanced_metrics': enhanced_metrics,
@@ -158,7 +157,7 @@ def configure_callback(conf):
         'exclude_optional_metrics': exclude_optional_metrics,
     }
 
-    collectd.debug("module_config: (%s)" % str(module_config))
+    collectd.info("module_config: (%s)" % str(module_config))
 
     collectd.register_read(
         read_metrics,
@@ -167,7 +166,7 @@ def configure_callback(conf):
 
 
 def read_metrics(data):
-    log_verbose('solr plugin: Read callback called')
+    # log_verbose('solr plugin: Read callback called')
     solrCloud = fetch_collections_info(data)
     default_dimensions = data['custom_dimensions']
 
@@ -212,7 +211,7 @@ def dispatch_value(instance, key, value, value_type, dimensions=None):
     val.values = [value]
     val.meta = {'0': True}
 
-    log_verbose('Emitting value: %s' % val)
+    # log_verbose('Emitting value: %s' % val)
     val.dispatch()
 
 
@@ -239,7 +238,7 @@ def prepare_dimensions(default_dimensions, core, solrCloud=None, collection=None
 
 
 def get_cores(data):
-    url = '%s/admin/cores?action=status&wt=json' % data['base_url']
+    url = '{0}/admin/cores?action=status&wt=json'.format(data['base_url'])
     cores = []
     try:
         log_verbose("Fetching %s" % url)
@@ -258,7 +257,7 @@ def get_cores(data):
 
 def fetch_solr_stats(data):
     """Connect to Solr stat page and and return JSON object"""
-    url = '%s/admin/metrics?wt=json&type=all&group=all' % (data['base_url'])
+    url = '{0}/admin/metrics?wt=json&type=all&group=all'.format(data['base_url'])
 
     if data['cluster'] is not None and 'leader' not in data.keys():
         log_verbose('Ignore metrics for solrCloud replica node %s' % data['base_url'])
@@ -280,11 +279,11 @@ def fetch_solr_stats(data):
 
 def fetch_collections_info(data):
     """Connect to SolrCloud status page and and return JSON object"""
-    url = '%s/admin/collections?action=CLUSTERSTATUS&wt=json' % data['base_url']
+    url = '{0}/admin/collections?action=CLUSTERSTATUS&wt=json'.format(data['base_url'])
     get_data = None
     solrCloud = {}
     try:
-        log_verbose("Fetching %s" % url)
+        # log_verbose("Fetching %s" % url)
         f = urllib2.urlopen(url)
         get_data = json.loads(f.read())
     except urllib2.HTTPError as e:
@@ -300,7 +299,7 @@ def fetch_collections_info(data):
     elif 'cluster' in get_data.keys():
         log_verbose('Solr running in SolrCloud mode')
         solrCollections = get_data['cluster']['collections'].keys()
-        leader_url = 'http://172.31.45.252:' + data['port'] + '/solr'
+        leader_url = data['member_id'] + '/solr'
         # solrCloud['leader'] = False
 
         for collection in solrCollections:
@@ -364,7 +363,6 @@ def dispatch_core_stats(data, solr_metrics, default_dimensions, solrCloud):
 
     for key in solrCloud.keys() if cores is None else cores:
         core = parse_corename(solrCloud[key]['core']) if cores is None else key
-        log_verbose('collection: {0}'.format(key))
         for cmetric in CORE_METRICS.keys():
             metric = "metrics.solr.core.{0}.{1}".format(core, cmetric)
             if metric in solr_metrics.keys():
