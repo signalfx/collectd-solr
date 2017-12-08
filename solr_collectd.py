@@ -91,6 +91,33 @@ NODE_METRICS = {
     }
 }
 
+ENHANCED_METRICS = {
+    'metrics.solr.jetty.org.eclipse.jetty.server.handler.DefaultHandler.active-requests.count':
+        Metric('solr.http_active_requests', 'gauge'),
+    'metrics.solr.jetty.org.eclipse.jetty.server.handler.DefaultHandler.5xx-responses.count':
+        Metric('solr.jetty_http_5xx_responses', 'counter'),
+    'metrics.solr.jetty.org.eclipse.jetty.server.handler.DefaultHandler.get-requests.mean_ms':
+        Metric('solr.jetty_get_request_latency', 'gauge'),
+    'metrics.solr.jetty.org.eclipse.jetty.server.handler.DefaultHandler.post-requests.mean_ms':
+        Metric('solr.jetty_post_request_latency', 'gauge'),
+    'metrics.solr.node.ADMIN./admin/zookeeper.requestTimes.mean_ms':
+        Metric('solr.zookeeper_request_time', 'gauge'),
+    'metrics.solr.node.ADMIN./admin/metrics.requestTimes.mean_ms':
+        Metric('solr.node_metric_request_time', 'gauge'),
+    'metrics.solr.node.ADMIN./admin/metrics.requests.count':
+        Metric('solr.node_metric_request_count', 'counter'),
+    'metrics.solr.node.ADMIN./admin/zookeeper.errors.count':
+        Metric('solr.zookeeper_errors', 'counter'),
+    'metrics.solr.jvm.os.openFileDescriptorCount':
+        Metric('solr.jvm_open_filedescriptors', 'counter'),
+    'metrics.solr.jvm.classes.loaded':
+        Metric('solr.jvm_classes_loaded', 'counter'),
+    'metrics.solr.jvm.buffers.mapped.MemoryUsed':
+        Metric('solr.jvm_mapped_memory_used', 'gauge'),
+    'metrics.solr.jvm.buffers.mapped.TotalCapacity':
+        Metric('solr.jvm_mapped_memory_capacity', 'gauge')
+}
+
 
 def log_verbose(msg):
     if not VERBOSE_LOGGING:
@@ -177,6 +204,9 @@ def read_metrics(data):
     solr_metrics = flatten_dict(response)
     dispatch_core_stats(data, solr_metrics, default_dimensions, solrCloud)
     dispatch_node_stats(data, solr_metrics, default_dimensions, solrCloud)
+
+    if data['enhanced_metrics'] or len(data['include_optional_metrics']) > 0:
+        dispatch_additional_metrics(data, solr_metrics, default_dimensions, solrCloud)
 
 
 def str_to_bool(flag):
@@ -299,16 +329,13 @@ def fetch_collections_info(data):
     elif 'cluster' in get_data.keys():
         log_verbose('Solr running in SolrCloud mode')
         solrCollections = get_data['cluster']['collections'].keys()
-        leader_url = data['member_id'] + '/solr'
-        # solrCloud['leader'] = False
 
         for collection in solrCollections:
             solrShards = get_data['cluster']['collections'][collection]['shards']
             for shard in solrShards.keys():
                 for coreNodes in solrShards[shard]['replicas'].keys():
                     coreNode = solrShards[shard]['replicas'][coreNodes]
-                    if 'leader' in coreNode.keys() and coreNode['base_url'] == leader_url:
-                        # and coreNode['base_url'] == data['base_url']
+                    if 'leader' in coreNode.keys() and coreNode['base_url'] == data['base_url']:
                         solrCloud[collection] = {}
                         log_verbose('leader node %s' % coreNode['node_name'])
                         data['leader'] = True
@@ -357,6 +384,37 @@ def flatten_dict(d, result=None):
     return result
 
 
+def dispatch_additional_metrics(data, solr_metrics, default_dimensions, solrCloud):
+    plugin_instance = data['member_id']
+    core = None
+    collection = None
+
+    if 'error' not in solrCloud.keys():
+        for key in solrCloud.keys():
+            if data['member_id']+'_solr' == solrCloud[key]['node']:
+                collection = key
+                core = solrCloud[key]['core']
+
+    if data['enhanced_metrics']:
+        for metric in ENHANCED_METRICS.keys():
+            if metric in data['exclude_optional_metrics']:
+                continue
+            if metric in solr_metrics.keys():
+                dimensions = prepare_dimensions(default_dimensions, core, solrCloud, collection)
+                dispatch_value(
+                    plugin_instance,
+                    ENHANCED_METRICS[metric].name,
+                    solr_metrics[metric],
+                    ENHANCED_METRICS[metric].type,
+                    dimensions
+                )
+    else:
+        for metric in data['include_optional_metrics']:
+            if metric in solr_metrics.keys():
+                dimensions = prepare_dimensions(default_dimensions, core, solrCloud, collection)
+                dispatch_value(plugin_instance, metric, solr_metrics[metric], 'gauge', dimensions)
+
+
 def dispatch_core_stats(data, solr_metrics, default_dimensions, solrCloud):
     plugin_instance = data['member_id']
     cores = get_cores(data) if 'error' in solrCloud.keys() else None
@@ -365,6 +423,8 @@ def dispatch_core_stats(data, solr_metrics, default_dimensions, solrCloud):
         core = parse_corename(solrCloud[key]['core']) if cores is None else key
         for cmetric in CORE_METRICS.keys():
             metric = "metrics.solr.core.{0}.{1}".format(core, cmetric)
+            if metric in data['exclude_optional_metrics']:
+                continue
             if metric in solr_metrics.keys():
                 dimensions = prepare_dimensions(default_dimensions, core, solrCloud, key)
                 dispatch_value(
@@ -393,6 +453,8 @@ def dispatch_node_stats(data, solr_metrics, default_dimensions, solrCloud):
                 metric = "metrics.solr.jetty.org.eclipse.jetty.server.handler.{0}".format(nmetric)
             else:
                 metric = "metrics.solr.{0}.{1}".format(registry, nmetric)
+            if metric in data['exclude_optional_metrics']:
+                continue
             if metric in solr_metrics.keys():
                 dimensions = prepare_dimensions(default_dimensions, core, solrCloud, collection)
                 dispatch_value(
