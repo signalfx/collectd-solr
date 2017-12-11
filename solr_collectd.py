@@ -19,11 +19,11 @@ Metric = collections.namedtuple('Metric', ('name', 'type'))
 
 CORE_METRICS = {
     'SEARCHER.searcher.deletedDocs':
-        Metric('solr.core_deleted_docs', 'counter'),
+        Metric('solr.core_deleted_docs', 'gauge'),
     'SEARCHER.searcher.indexVersion':
-        Metric('solr.core_indexed_docs', 'counter'),
+        Metric('solr.core_indexed_docs', 'gauge'),
     'SEARCHER.searcher.numDocs':
-        Metric('solr.core_num_docs', 'counter'),
+        Metric('solr.core_num_docs', 'gauge'),
     'CORE.fs.totalSpace':
         Metric('solr.core_totalspace', 'gauge'),
     'CORE.fs.usableSpace':
@@ -41,11 +41,11 @@ CORE_METRICS = {
 NODE_METRICS = {
     'node': {
         'ADMIN./admin/collections.requestTimes.mean_ms':
-            Metric('solr.node.collections.requestTimes', 'gauge'),
+            Metric('solr.node_collections_requestTimes', 'gauge'),
         'ADMIN./admin/cores.requestTimes.mean_ms':
-            Metric('solr.node.cores.requestTimes', 'gauge'),
+            Metric('solr.node_cores_requestTimes', 'gauge'),
         'ADMIN./admin/zookeeper.requestTimes.mean_ms':
-            Metric('solr.node.zookeeper.requestTimes', 'gauge'),
+            Metric('solr.node_zookeeper_requestTimes', 'gauge'),
     },
     'jetty': {
         'DefaultHandler.2xx-responses.count':
@@ -221,8 +221,10 @@ def str_to_bool(flag):
     return False
 
 
-def parse_corename(core):
-    core = re.sub(r'_', '.', core)
+def parse_corename(collection, solrCloud):
+    core = solrCloud[collection]['core']
+    replica = core.split("_")[-1]
+    core = "{0}.{1}.{2}".format(collection, solrCloud[collection]['shard'], replica)
     return core
 
 
@@ -290,7 +292,7 @@ def fetch_solr_stats(data):
     url = '{0}/admin/metrics?wt=json&type=all&group=all'.format(data['base_url'])
 
     if data['cluster'] is not None and 'leader' not in data.keys():
-        log_verbose('Ignore metrics for solrCloud replica node %s' % data['base_url'])
+        # log_verbose('Ignore metrics for solrCloud replica node %s' % data['base_url'])
         return None
     try:
         log_verbose("Fetching %s" % url)
@@ -337,7 +339,7 @@ def fetch_collections_info(data):
                     coreNode = solrShards[shard]['replicas'][coreNodes]
                     if 'leader' in coreNode.keys() and coreNode['base_url'] == data['base_url']:
                         solrCloud[collection] = {}
-                        log_verbose('leader node %s' % coreNode['node_name'])
+                        # log_verbose('leader node %s' % coreNode['node_name'])
                         data['leader'] = True
                         solrCloud[collection]['leader'] = coreNode['leader']
                         solrCloud[collection]['core'] = coreNode['core']
@@ -420,7 +422,7 @@ def dispatch_core_stats(data, solr_metrics, default_dimensions, solrCloud):
     cores = get_cores(data) if 'error' in solrCloud.keys() else None
 
     for key in solrCloud.keys() if cores is None else cores:
-        core = parse_corename(solrCloud[key]['core']) if cores is None else key
+        core = parse_corename(key, solrCloud) if cores is None else key
         for cmetric in CORE_METRICS.keys():
             metric = "metrics.solr.core.{0}.{1}".format(core, cmetric)
             if metric in data['exclude_optional_metrics']:
