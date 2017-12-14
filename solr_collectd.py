@@ -1,11 +1,7 @@
 #!/usr/bin/env python
-#
-# Collectd plugin for apache-solr
-#
 
-import sys
-import re
 import urllib2
+import urllib_ssl_handler
 import collections
 import collectd
 import json
@@ -52,6 +48,8 @@ NODE_METRICS = {
             Metric('solr.http_2xx_responses', 'counter'),
         'DefaultHandler.4xx-responses.count':
             Metric('solr.http_4xx_responses', 'counter'),
+        'DefaultHandler.5xx-responses.count':
+            Metric('solr.http_5xx_responses', 'counter'),
         'DefaultHandler.requests.count':
             Metric('solr.http_requests', 'counter'),
         'DefaultHandler.requests.mean_ms':
@@ -69,13 +67,13 @@ NODE_METRICS = {
         'memory.total.used':
             Metric('solr.jvm_total_memory_used', 'gauge'),
         'memory.pools.Metaspace.usage':
-            Metric('solr.jvm.memory.pools.Metaspace.usage', 'gauge'),
+            Metric('solr.jvm_memory_pools_Metaspace_usage', 'gauge'),
         'memory.pools.Par-Eden-Space.usage':
-            Metric('solr.jvm.memory.pools.Par-Eden-Space.usage', 'gauge'),
+            Metric('solr.jvm_memory_pools_Par-Eden-Space_usage', 'gauge'),
         'memory.pools.Par-Survivor-Space.usage':
-            Metric('solr.jvm.memory.pools.Par-Survivor-Space.usage', 'gauge'),
+            Metric('solr.jvm_memory_pools_Par-Survivor-Space_usage', 'gauge'),
         'memory.pools.Code-Cache.usage':
-            Metric('solr.jvm.memory.pools.Code-Cache.usage', 'gauge'),
+            Metric('solr.jvm_memory_pools_Code-Cache_usage', 'gauge'),
         'gc.ConcurrentMarkSweep.count':
             Metric('solr.jvm_gc_cms_count', 'gauge'),
         'gc.ConcurrentMarkSweep.time':
@@ -119,21 +117,22 @@ ENHANCED_METRICS = {
 }
 
 
-def log_verbose(msg):
-    if not VERBOSE_LOGGING:
-        return
-    collectd.info('solr_info plugin [verbose]: %s' % msg)
+def make_logger_name(member_id):
+    return "%s.%s" % (PLUGIN_NAME, member_id)
 
 
 def configure_callback(conf):
     """Receive configuration block"""
     plugin_conf = {}
-    cluster = ''
+    cluster = 'default'
     interval = DEFAULT_INTERVAL
+    username = None
+    password = None
     custom_dimensions = {}
     enhanced_metrics = False
     exclude_optional_metrics = set()
     include_optional_metrics = set()
+    ssl_keys = {}
     http_timeout = DEFAULT_API_TIMEOUT
 
     required_keys = frozenset(('Host', 'Port'))
@@ -141,6 +140,10 @@ def configure_callback(conf):
     for val in conf.children:
         if val.key in required_keys:
             plugin_conf[val.key] = val.values[0]
+        elif val.key == 'Username' and val.values[0]:
+            username = val.values[0]
+        elif val.key == 'Password' and val.values[0]:
+            password = val.values[0]
         elif val.key == 'Interval' and val.values[0]:
             interval = val.values[0]
         elif val.key == 'Cluster' and val.values[0]:
@@ -157,17 +160,39 @@ def configure_callback(conf):
             include_optional_metrics.add(val.values[0])
         elif val.key == 'ExcludeMetric' and val.values[0]:
             exclude_optional_metrics.add(val.values[0])
-
-    collectd.info("Configuration settings:")
+        elif val.key == 'ssl_keyfile' and val.values[0]:
+            ssl_keys['ssl_keyfile'] = val.values[0]
+        elif val.key == 'ssl_certificate' and val.values[0]:
+            ssl_keys['ssl_certificate'] = val.values[0]
+        elif val.key == 'ssl_ca_certs' and val.values[0]:
+            ssl_keys['ssl_ca_certs'] = val.values[0]
 
     for key in required_keys:
         try:
             val = plugin_conf[key]
-            collectd.info("%s : %s" % (key, val))
         except KeyError:
             raise KeyError("Missing required config setting: %s" % key)
 
     base_url = ("http://{0}:{1}/solr".format(plugin_conf['Host'], plugin_conf['Port']))
+
+    https_handler = None
+    if 'ssl_certificate' in ssl_keys and 'ssl_keyfile' in ssl_keys:
+        base_url = ('https' + base_url[4:])
+        https_handler = urllib_ssl_handler.HTTPSHandler(key_file=ssl_keys['ssl_keyfile'],
+                                                        cert_file=ssl_keys['ssl_certificate'],
+                                                        ca_certs=ssl_keys['ssl_ca_certs'])
+
+    # Auth handler to handle basic http authentication.
+    auth = urllib2.HTTPPasswordMgrWithDefaultRealm()
+    if username is None and password is None:
+        username = password = ''
+
+    auth.add_password(None, uri=base_url, user=username, passwd=password)
+    auth_handler = urllib2.HTTPBasicAuthHandler(auth)
+    if https_handler:
+        opener = urllib2.build_opener(auth_handler, https_handler)
+    else:
+        opener = urllib2.build_opener(auth_handler)
 
     module_config = {
         'state': None,
@@ -177,14 +202,13 @@ def configure_callback(conf):
         'cluster': cluster,
         'interval': interval,
         'base_url': base_url,
+        'opener': opener,
         'http_timeout': http_timeout,
         'custom_dimensions': custom_dimensions,
         'enhanced_metrics': enhanced_metrics,
         'include_optional_metrics': include_optional_metrics,
         'exclude_optional_metrics': exclude_optional_metrics,
     }
-
-    collectd.info("module_config: (%s)" % str(module_config))
 
     collectd.register_read(
         read_metrics,
@@ -193,20 +217,20 @@ def configure_callback(conf):
 
 
 def read_metrics(data):
-    # log_verbose('solr plugin: Read callback called')
-    solrCloud = fetch_collections_info(data)
+    solr_cloud = fetch_collections_info(data)
     default_dimensions = data['custom_dimensions']
 
+    collectd.debug("{0} - STARTED FETCHING METRICS".format(data['member_id']))
     response = fetch_solr_stats(data)
     if response is None:
         return
 
     solr_metrics = flatten_dict(response)
-    dispatch_core_stats(data, solr_metrics, default_dimensions, solrCloud)
-    dispatch_node_stats(data, solr_metrics, default_dimensions, solrCloud)
+    dispatch_core_stats(data, solr_metrics, default_dimensions, solr_cloud)
+    dispatch_node_stats(data, solr_metrics, default_dimensions, solr_cloud)
 
     if data['enhanced_metrics'] or len(data['include_optional_metrics']) > 0:
-        dispatch_additional_metrics(data, solr_metrics, default_dimensions, solrCloud)
+        dispatch_additional_metrics(data, solr_metrics, default_dimensions, solr_cloud)
 
 
 def str_to_bool(flag):
@@ -221,16 +245,15 @@ def str_to_bool(flag):
     return False
 
 
-def parse_corename(collection, solrCloud):
-    core = solrCloud[collection]['core']
+def parse_corename(collection, solr_cloud):
+    core = solr_cloud[collection]['core']
     replica = core.split("_")[-1]
-    core = "{0}.{1}.{2}".format(collection, solrCloud[collection]['shard'], replica)
+    core = "{0}.{1}.{2}".format(collection, solr_cloud[collection]['shard'], replica)
     return core
 
 
 def dispatch_value(instance, key, value, value_type, dimensions=None):
     """Dispatch a value to collectd"""
-    # log_verbose('Sending value: %s.%s=%s' % (instance, key, value))
     val = collectd.Values(plugin=PLUGIN_NAME)
     val.plugin_instance = instance
 
@@ -255,81 +278,80 @@ def get_dimension_string(dimensions):
     return dim_str
 
 
-def prepare_dimensions(default_dimensions, core, solrCloud=None, collection=None):
+def prepare_dimensions(default_dimensions, core, solr_cloud=None, collection=None):
     dimensions = default_dimensions
 
-    if 'error' in solrCloud.keys():
+    if 'error' in solr_cloud.keys():
         dimensions['core'] = core
     else:
         dimensions['collection'] = collection
-        dimensions['node'] = solrCloud[collection]['node']
-        dimensions['shard'] = solrCloud[collection]['shard']
-        dimensions['core'] = solrCloud[collection]['core']
+        dimensions['node'] = solr_cloud[collection]['node']
+        dimensions['shard'] = solr_cloud[collection]['shard']
+        dimensions['core'] = solr_cloud[collection]['core']
 
     return dimensions
 
 
+def _api_call(url, opener=None):
+    """
+    _api_call will handle all the calls to the api.
+    It adds http basic authentication header if provided.
+    The response of the api call is then deserialized from json to dict.
+    """
+    resp = None
+    collectd.debug("METRICS FROM %s ENDPOINT" % url)
+    try:
+        if opener is not None:
+            urllib2.install_opener(opener)
+        req = urllib2.Request(url)
+        resp = urllib2.urlopen(req)
+    except (urllib2.HTTPError, urllib2.URLError) as e:
+        collectd.error("Error making API call ({0}) {1}".format(e, url))
+        return None
+    try:
+        return json.load(resp)
+    except ValueError as e:
+        collectd.error("Error parsing JSON for API call ({0}) {1}".format(e, url))
+        return None
+
+
 def get_cores(data):
     url = '{0}/admin/cores?action=status&wt=json'.format(data['base_url'])
-    cores = []
-    try:
-        log_verbose("Fetching %s" % url)
-        f = urllib2.urlopen(url)
-        json_data = json.loads(f.read())
-        cores = json_data['status'].keys()
-    except urllib2.HTTPError as e:
-        log_verbose('solr_collectd plugin get_cores: can\'t get info, HTTP error: ' + str(e.code))
-        log_verbose(url)
-    except urllib2.URLError as e:
-        log_verbose('solr_collectd plugin get_cores: can\'t get info: ' + str(e.reason))
-        log_verbose(url)
 
-    return cores
+    return _api_call(url, data['opener'])['status'].keys()
 
 
 def fetch_solr_stats(data):
     """Connect to Solr stat page and and return JSON object"""
     url = '{0}/admin/metrics?wt=json&type=all&group=all'.format(data['base_url'])
 
-    if data['cluster'] is not None and 'leader' not in data.keys():
-        # log_verbose('Ignore metrics for solrCloud replica node %s' % data['base_url'])
-        return None
-    try:
-        log_verbose("Fetching %s" % url)
-        f = urllib2.urlopen(url)
-        json_data = json.loads(f.read())
-        return json_data
-    except urllib2.HTTPError as e:
-        log_verbose('solr_collectd plugin get_cores: can\'t get info, HTTP error: ' + str(e.code))
-        log_verbose(url)
-    except urllib2.URLError as e:
-        log_verbose('solr_collectd plugin get_cores: can\'t get info: ' + str(e.reason))
-        log_verbose(url)
-
-    return None
+    return _api_call(url, data['opener'])
 
 
 def fetch_collections_info(data):
-    """Connect to SolrCloud status page and and return JSON object"""
+    """Connect to solr_cloud status page and and return JSON object"""
     url = '{0}/admin/collections?action=CLUSTERSTATUS&wt=json'.format(data['base_url'])
-    get_data = None
-    solrCloud = {}
-    try:
-        # log_verbose("Fetching %s" % url)
-        f = urllib2.urlopen(url)
-        get_data = json.loads(f.read())
-    except urllib2.HTTPError as e:
-        log_verbose('solr_collectd plugin: can\'t get info, HTTP error: ')
-        solrCloud['error'] = 'Solr instance is not running in SolrCloud mode'
-        return solrCloud
-    except urllib2.URLError as e:
-        log_verbose('solr_collectd plugin: can\'t get info: ' + e.reason)
+    get_data = _api_call(url, data['opener'])
+    solr_cloud = {}
+    # try:
+    #     # log_verbose("Fetching %s" % url)
+    #     f = urllib2.urlopen(url)
+    #     get_data = json.loads(f.read())
+    # except urllib2.HTTPError as e:
+    #     log_verbose('solr_collectd plugin: can\'t get info, HTTP error: ')
+    #     solr_cloud['error'] = 'Solr instance is not running in solr_cloud mode'
+    #     return solr_cloud
+    # except urllib2.URLError as e:
+    #     log_verbose('solr_collectd plugin: can\'t get info: ' + e.reason)
 
-    if 'error' in get_data.keys():
-        log_verbose('%s' % get_data['error']['msg'])
-        solrCloud['error'] = get_data['error']['msg']
+    if get_data is None:
+        collectd.error('solr_collectd plugin: can\'t get info')
+        solr_cloud['error'] = 'Solr instance is not running in solr_cloud mode'
+    elif 'error' in get_data.keys():
+        collectd.warning('%s' % get_data['error']['msg'])
+        solr_cloud['error'] = get_data['error']['msg']
     elif 'cluster' in get_data.keys():
-        log_verbose('Solr running in SolrCloud mode')
+        collectd.info('{0} - Solr running in solr_cloud mode'.format(data['member_id']))
         solrCollections = get_data['cluster']['collections'].keys()
 
         for collection in solrCollections:
@@ -338,15 +360,14 @@ def fetch_collections_info(data):
                 for coreNodes in solrShards[shard]['replicas'].keys():
                     coreNode = solrShards[shard]['replicas'][coreNodes]
                     if 'leader' in coreNode.keys() and coreNode['base_url'] == data['base_url']:
-                        solrCloud[collection] = {}
-                        # log_verbose('leader node %s' % coreNode['node_name'])
+                        solr_cloud[collection] = {}
                         data['leader'] = True
-                        solrCloud[collection]['leader'] = coreNode['leader']
-                        solrCloud[collection]['core'] = coreNode['core']
-                        solrCloud[collection]['node'] = coreNode['node_name']
-                        solrCloud[collection]['shard'] = shard
-                        solrCloud[collection]['collection'] = collection
-    return solrCloud
+                        solr_cloud[collection]['leader'] = coreNode['leader']
+                        solr_cloud[collection]['core'] = coreNode['core']
+                        solr_cloud[collection]['node'] = coreNode['node_name']
+                        solr_cloud[collection]['shard'] = shard
+                        solr_cloud[collection]['collection'] = collection
+    return solr_cloud
 
 
 def flatten_dict(d, result=None):
@@ -386,23 +407,23 @@ def flatten_dict(d, result=None):
     return result
 
 
-def dispatch_additional_metrics(data, solr_metrics, default_dimensions, solrCloud):
+def dispatch_additional_metrics(data, solr_metrics, default_dimensions, solr_cloud):
     plugin_instance = data['member_id']
     core = None
     collection = None
 
-    if 'error' not in solrCloud.keys():
-        for key in solrCloud.keys():
-            if data['member_id']+'_solr' == solrCloud[key]['node']:
+    if 'error' not in solr_cloud.keys():
+        for key in solr_cloud.keys():
+            if data['member_id']+'_solr' == solr_cloud[key]['node']:
                 collection = key
-                core = solrCloud[key]['core']
+                core = solr_cloud[key]['core']
 
     if data['enhanced_metrics']:
         for metric in ENHANCED_METRICS.keys():
             if metric in data['exclude_optional_metrics']:
                 continue
             if metric in solr_metrics.keys():
-                dimensions = prepare_dimensions(default_dimensions, core, solrCloud, collection)
+                dimensions = prepare_dimensions(default_dimensions, core, solr_cloud, collection)
                 dispatch_value(
                     plugin_instance,
                     ENHANCED_METRICS[metric].name,
@@ -413,22 +434,22 @@ def dispatch_additional_metrics(data, solr_metrics, default_dimensions, solrClou
     else:
         for metric in data['include_optional_metrics']:
             if metric in solr_metrics.keys():
-                dimensions = prepare_dimensions(default_dimensions, core, solrCloud, collection)
+                dimensions = prepare_dimensions(default_dimensions, core, solr_cloud, collection)
                 dispatch_value(plugin_instance, metric, solr_metrics[metric], 'gauge', dimensions)
 
 
-def dispatch_core_stats(data, solr_metrics, default_dimensions, solrCloud):
+def dispatch_core_stats(data, solr_metrics, default_dimensions, solr_cloud):
     plugin_instance = data['member_id']
-    cores = get_cores(data) if 'error' in solrCloud.keys() else None
+    cores = get_cores(data) if 'error' in solr_cloud.keys() else None
 
-    for key in solrCloud.keys() if cores is None else cores:
-        core = parse_corename(key, solrCloud) if cores is None else key
+    for key in solr_cloud.keys() if cores is None else cores:
+        core = parse_corename(key, solr_cloud) if cores is None else key
         for cmetric in CORE_METRICS.keys():
             metric = "metrics.solr.core.{0}.{1}".format(core, cmetric)
             if metric in data['exclude_optional_metrics']:
                 continue
             if metric in solr_metrics.keys():
-                dimensions = prepare_dimensions(default_dimensions, core, solrCloud, key)
+                dimensions = prepare_dimensions(default_dimensions, core, solr_cloud, key)
                 dispatch_value(
                     plugin_instance,
                     CORE_METRICS[cmetric].name,
@@ -438,16 +459,16 @@ def dispatch_core_stats(data, solr_metrics, default_dimensions, solrCloud):
                 )
 
 
-def dispatch_node_stats(data, solr_metrics, default_dimensions, solrCloud):
+def dispatch_node_stats(data, solr_metrics, default_dimensions, solr_cloud):
     plugin_instance = data['member_id']
     core = None
     collection = None
 
-    if 'error' not in solrCloud.keys():
-        for key in solrCloud.keys():
-            if data['member_id']+'_solr' == solrCloud[key]['node']:
+    if 'error' not in solr_cloud.keys():
+        for key in solr_cloud.keys():
+            if data['member_id']+'_solr' == solr_cloud[key]['node']:
                 collection = key
-                core = solrCloud[key]['core']
+                core = solr_cloud[key]['core']
 
     for registry in ('node', 'jetty', 'jvm'):
         for nmetric in NODE_METRICS[registry].keys():
@@ -458,7 +479,7 @@ def dispatch_node_stats(data, solr_metrics, default_dimensions, solrCloud):
             if metric in data['exclude_optional_metrics']:
                 continue
             if metric in solr_metrics.keys():
-                dimensions = prepare_dimensions(default_dimensions, core, solrCloud, collection)
+                dimensions = prepare_dimensions(default_dimensions, core, solr_cloud, collection)
                 dispatch_value(
                     plugin_instance,
                     NODE_METRICS[registry][nmetric].name,
