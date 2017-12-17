@@ -218,12 +218,14 @@ def configure_callback(conf):
 
 def read_metrics(data):
     solr_cloud = fetch_collections_info(data)
-    default_dimensions = data['custom_dimensions']
+    if not solr_cloud:
+        return None
 
+    default_dimensions = data['custom_dimensions']
     collectd.debug("{0} - STARTED FETCHING METRICS".format(data['member_id']))
     response = fetch_solr_stats(data)
     if response is None:
-        return
+        return None
 
     solr_metrics = flatten_dict(response)
     dispatch_core_stats(data, solr_metrics, default_dimensions, solr_cloud)
@@ -351,7 +353,7 @@ def fetch_collections_info(data):
         collectd.warning('%s' % get_data['error']['msg'])
         solr_cloud['error'] = get_data['error']['msg']
     elif 'cluster' in get_data.keys():
-        collectd.info('{0} - Solr running in solr_cloud mode'.format(data['member_id']))
+
         solrCollections = get_data['cluster']['collections'].keys()
 
         for collection in solrCollections:
@@ -360,8 +362,8 @@ def fetch_collections_info(data):
                 for coreNodes in solrShards[shard]['replicas'].keys():
                     coreNode = solrShards[shard]['replicas'][coreNodes]
                     if 'leader' in coreNode.keys() and coreNode['base_url'] == data['base_url']:
+                        collectd.debug('{0} - Solr running in solr_cloud mode'.format(data['member_id']))
                         solr_cloud[collection] = {}
-                        data['leader'] = True
                         solr_cloud[collection]['leader'] = coreNode['leader']
                         solr_cloud[collection]['core'] = coreNode['core']
                         solr_cloud[collection]['node'] = coreNode['node_name']
