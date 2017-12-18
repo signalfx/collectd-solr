@@ -16,10 +16,14 @@ Metric = collections.namedtuple('Metric', ('name', 'type'))
 CORE_METRICS = {
     'SEARCHER.searcher.deletedDocs':
         Metric('solr.core_deleted_docs', 'gauge'),
-    'SEARCHER.searcher.indexVersion':
-        Metric('solr.core_indexed_docs', 'gauge'),
+    'SEARCHER.searcher.maxDoc':
+        Metric('solr.core_max_docs', 'gauge'),
     'SEARCHER.searcher.numDocs':
         Metric('solr.core_num_docs', 'gauge'),
+    'SEARCHER.new.warmup.mean_ms':
+        Metric('solr.searcher_new_warmup_time', 'gauge'),
+    'SEARCHER.searcher.warmupTime':
+        Metric('solr.searcher_warmup', 'gauge'),
     'CORE.fs.totalSpace':
         Metric('solr.core_totalspace', 'gauge'),
     'CORE.fs.usableSpace':
@@ -36,12 +40,14 @@ CORE_METRICS = {
 
 NODE_METRICS = {
     'node': {
-        'ADMIN./admin/collections.requestTimes.mean_ms':
-            Metric('solr.node_collections_requestTimes', 'gauge'),
-        'ADMIN./admin/cores.requestTimes.mean_ms':
-            Metric('solr.node_cores_requestTimes', 'gauge'),
-        'ADMIN./admin/zookeeper.requestTimes.mean_ms':
-            Metric('solr.node_zookeeper_requestTimes', 'gauge'),
+        'ADMIN./admin/collections.requests.count':
+            Metric('solr.node_collections_requests', 'counter'),
+        'ADMIN./admin/cores.requests.count':
+            Metric('solr.node_cores_requests', 'counter'),
+        'ADMIN./admin/zookeeper.requests.count':
+            Metric('solr.node_zookeeper_requests', 'counter'),
+        'ADMIN./admin/metrics.requests.count':
+            Metric('solr.node_metrics_requests', 'counter')
     },
     'jetty': {
         'DefaultHandler.2xx-responses.count':
@@ -267,8 +273,6 @@ def dispatch_value(instance, key, value, value_type, dimensions=None):
     val.type_instance = key
     val.values = [value]
     val.meta = {'0': True}
-
-    # log_verbose('Emitting value: %s' % val)
     val.dispatch()
 
 
@@ -280,12 +284,12 @@ def get_dimension_string(dimensions):
     return dim_str
 
 
-def prepare_dimensions(default_dimensions, core, solr_cloud=None, collection=None):
+def prepare_dimensions(default_dimensions, core=None, solr_cloud=None, collection=None):
     dimensions = default_dimensions
 
-    if 'error' in solr_cloud.keys():
+    if 'error' in solr_cloud.keys() and core is not None:
         dimensions['core'] = core
-    else:
+    elif solr_cloud and collection:
         dimensions['collection'] = collection
         dimensions['node'] = solr_cloud[collection]['node']
         dimensions['shard'] = solr_cloud[collection]['shard']
@@ -335,16 +339,6 @@ def fetch_collections_info(data):
     url = '{0}/admin/collections?action=CLUSTERSTATUS&wt=json'.format(data['base_url'])
     get_data = _api_call(url, data['opener'])
     solr_cloud = {}
-    # try:
-    #     # log_verbose("Fetching %s" % url)
-    #     f = urllib2.urlopen(url)
-    #     get_data = json.loads(f.read())
-    # except urllib2.HTTPError as e:
-    #     log_verbose('solr_collectd plugin: can\'t get info, HTTP error: ')
-    #     solr_cloud['error'] = 'Solr instance is not running in solr_cloud mode'
-    #     return solr_cloud
-    # except urllib2.URLError as e:
-    #     log_verbose('solr_collectd plugin: can\'t get info: ' + e.reason)
 
     if get_data is None:
         collectd.error('solr_collectd plugin: can\'t get info')
@@ -353,9 +347,9 @@ def fetch_collections_info(data):
         collectd.warning('%s' % get_data['error']['msg'])
         solr_cloud['error'] = get_data['error']['msg']
     elif 'cluster' in get_data.keys():
-
+        if 'cluster' not in data['custom_dimensions']:
+            data['custom_dimensions']['cluster'] = data['cluster']
         solrCollections = get_data['cluster']['collections'].keys()
-
         for collection in solrCollections:
             solrShards = get_data['cluster']['collections'][collection]['shards']
             for shard in solrShards.keys():
