@@ -37,7 +37,7 @@ CORE_METRICS = {
     'QUERY./select.requestTimes.mean_ms':
         Metric('solr.search_query_response', 'gauge'),
     'QUERY./select.requests.count':
-        Metric('solr.search_query_requests', 'counter')
+        Metric('solr.search_query_requests', 'counter'),
     'REPLICATION./replication.requestTimes.mean_ms':
         Metric('solr.replication_handler_response', 'gauge'),
     'REPLICATION./replication.requests.count':
@@ -234,11 +234,15 @@ def read_metrics(data):
         return None
 
     solr_metrics = flatten_dict(response)
-    dispatch_core_stats(data, solr_metrics, default_dimensions, solr_cloud)
-    dispatch_node_stats(data, solr_metrics, default_dimensions, solr_cloud)
+    added_dpm = 0
+    core_dpm = dispatch_core_stats(data, solr_metrics, default_dimensions, solr_cloud)
+    node_dpm = dispatch_node_stats(data, solr_metrics, default_dimensions, solr_cloud)
 
     if data['enhanced_metrics'] or len(data['include_optional_metrics']) > 0:
-        dispatch_additional_metrics(data, solr_metrics, default_dimensions, solr_cloud)
+        added_dpm = dispatch_additional_metrics(data, solr_metrics, default_dimensions, solr_cloud)
+
+    collectd.info("Apache Solr - Dispatched {0} data points for {1}".
+                  format(core_dpm+node_dpm+added_dpm, data['member_id']))
 
 
 def str_to_bool(flag):
@@ -407,6 +411,7 @@ def dispatch_additional_metrics(data, solr_metrics, default_dimensions, solr_clo
     plugin_instance = data['member_id']
     core = None
     collection = None
+    dpm_count = 0
 
     if 'error' not in solr_cloud.keys():
         for key in solr_cloud.keys():
@@ -427,15 +432,19 @@ def dispatch_additional_metrics(data, solr_metrics, default_dimensions, solr_clo
                     ENHANCED_METRICS[metric].type,
                     dimensions
                 )
+                dpm_count += 1
     else:
         for metric in data['include_optional_metrics']:
             if metric in solr_metrics.keys():
                 dimensions = prepare_dimensions(default_dimensions, core, solr_cloud, collection)
                 dispatch_value(plugin_instance, metric, solr_metrics[metric], 'gauge', dimensions)
+                dpm_count += 1
+    return dpm_count
 
 
 def dispatch_core_stats(data, solr_metrics, default_dimensions, solr_cloud):
     plugin_instance = data['member_id']
+    dpm_count = 0
     cores = get_cores(data) if 'error' in solr_cloud.keys() else None
 
     for key in solr_cloud.keys() if cores is None else cores:
@@ -453,12 +462,15 @@ def dispatch_core_stats(data, solr_metrics, default_dimensions, solr_cloud):
                     CORE_METRICS[cmetric].type,
                     dimensions
                 )
+                dpm_count += 1
+    return dpm_count
 
 
 def dispatch_node_stats(data, solr_metrics, default_dimensions, solr_cloud):
     plugin_instance = data['member_id']
     core = None
     collection = None
+    dpm_count = 0
 
     if 'error' not in solr_cloud.keys():
         for key in solr_cloud.keys():
@@ -483,6 +495,8 @@ def dispatch_node_stats(data, solr_metrics, default_dimensions, solr_cloud):
                     NODE_METRICS[registry][nmetric].type,
                     dimensions
                 )
+                dpm_count += 1
+    return dpm_count
 
 
 if __name__ == "__main__":
