@@ -20,8 +20,6 @@ CORE_METRICS = {
         Metric('solr.core_max_docs', 'gauge'),
     'SEARCHER.searcher.numDocs':
         Metric('solr.core_num_docs', 'gauge'),
-    'SEARCHER.new.warmup.mean_ms':
-        Metric('solr.searcher_new_warmup_time', 'gauge'),
     'SEARCHER.searcher.warmupTime':
         Metric('solr.searcher_warmup', 'gauge'),
     'CORE.fs.totalSpace':
@@ -35,7 +33,19 @@ CORE_METRICS = {
     'CACHE.searcher.fieldValueCache.cumulative_hitratio':
         Metric('solr.field_value_cache_cumulative_hitratio', 'gauge'),
     'CACHE.searcher.queryResultCache.cumulative_hitratio':
-        Metric('solr.query_result_cache_cumulative_hitratio', 'gauge')
+        Metric('solr.query_result_cache_cumulative_hitratio', 'gauge'),
+    'QUERY./select.requestTimes.mean_ms':
+        Metric('solr.search_query_response', 'gauge'),
+    'QUERY./select.requests.count':
+        Metric('solr.search_query_requests', 'counter')
+    'REPLICATION./replication.requestTimes.mean_ms':
+        Metric('solr.replication_handler_response', 'gauge'),
+    'REPLICATION./replication.requests.count':
+        Metric('solr.replication_handler_requests', 'counter'),
+    'UPDATE./update.requestTimes.mean_ms':
+        Metric('solr.update_request_handler_response', 'gauge'),
+    'UPDATE./update.requests.count':
+        Metric('solr.update_handler_requests', 'counter')
 }
 
 NODE_METRICS = {
@@ -64,10 +74,6 @@ NODE_METRICS = {
     'jvm': {
         'memory.heap.usage':
             Metric('solr.jvm_heap_usage', 'gauge'),
-        'buffers.direct.MemoryUsed':
-            Metric('solr.jvm_direct_memory_used', 'gauge'),
-        'buffers.direct.TotalCapacity':
-            Metric('solr.jvm_direct_memory_capacity', 'gauge'),
         'memory.total.max':
             Metric('solr.jvm_total_memory', 'gauge'),
         'memory.total.used':
@@ -87,19 +93,13 @@ NODE_METRICS = {
         'gc.ParNew.count':
             Metric('solr.jvm_gc_parnew_count', 'gauge'),
         'gc.ParNew.time':
-            Metric('solr.jvm_gc_parnew_time', 'gauge'),
-        'threads.count':
-            Metric('solr.jvm_active_threads', 'gauge'),
-        'threads.runnable.count':
-            Metric('solr.jvm_runnable_threads', 'gauge')
+            Metric('solr.jvm_gc_parnew_time', 'gauge')
     }
 }
 
 ENHANCED_METRICS = {
     'metrics.solr.jetty.org.eclipse.jetty.server.handler.DefaultHandler.active-requests.count':
         Metric('solr.http_active_requests', 'gauge'),
-    'metrics.solr.jetty.org.eclipse.jetty.server.handler.DefaultHandler.5xx-responses.count':
-        Metric('solr.jetty_http_5xx_responses', 'counter'),
     'metrics.solr.jetty.org.eclipse.jetty.server.handler.DefaultHandler.get-requests.mean_ms':
         Metric('solr.jetty_get_request_latency', 'gauge'),
     'metrics.solr.jetty.org.eclipse.jetty.server.handler.DefaultHandler.post-requests.mean_ms':
