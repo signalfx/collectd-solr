@@ -5,7 +5,6 @@ An apache solr [collectd](http://www.collectd.org/) plugin which users can use t
 ## Installation
 
 * Checkout this repository somewhere on your system accessible by collectd. The suggested location is `/usr/share/collectd/`
-* Install the Python requirements with sudo ```pip install -r requirements.txt```
 * Configure the plugin (see below)
 * Restart collectd
 
@@ -18,7 +17,7 @@ An apache solr [collectd](http://www.collectd.org/) plugin which users can use t
 ## Configuration
 The following are required configuration keys:
 
-* Host - Required. Hostname or IP address of the etcd member, default is 'localhost'
+* Host - Required. Hostname or IP address of the solr node, default is 'localhost'
 * Port - Required. The port of the solr node, default is '8983'
 
 Optional configurations keys include:
@@ -30,7 +29,7 @@ Optional configurations keys include:
 * ExcludeMetric - Metrics from the `/metrics` endpoint can be excluded individually
 * Dimension - Add extra dimensions to your metrics
 
-Specify path to keyfile and certificate if certificate based authentication of clients is enabled on your etcd server
+Specify path to keyfile and certificate if certificate based authentication of clients is enabled on your solr node
 * ssl_keyfile - path to file
 * ssl_certificate - path to file
 
@@ -53,7 +52,7 @@ LoadPlugin python
     EnhancedMetrics False
     IncludeMetric "metrics.solr.jvm.buffers.mapped.MemoryUsed"
   </Module>
-  <Module etcd_plugin>
+  <Module solr_collectd>
     Host "localhost"
     Port "7574"
     Cluster "prod"
