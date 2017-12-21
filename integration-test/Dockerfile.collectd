@@ -1,0 +1,16 @@
+FROM quay.io/signalfuse/collectd:latest
+
+# Disable everything we can except elasticsearch
+ENV COLLECTD_INTERVAL=3 COLLECTD_HOSTNAME=solr-test DISABLE_AGGREGATION=true DISABLE_CPU=true DISABLE_CPUFREQ=true DISABLE_DF=true DISABLE_DISK=true DISABLE_DOCKER=true DISABLE_HOST_MONITORING=true DISABLE_INTERFACE=true DISABLE_LOAD=true DISABLE_MEMORY=true DISABLE_PROTOCOLS=true DISABLE_VMEM=true DISABLE_UPTIME=true
+
+# Debian is super minimalistic
+RUN apt-get update &&\
+    apt-get install -yq netcat curl
+
+CMD /.docker/setup_solr
+ADD integration-test/setup_solr /.docker/setup_solr
+
+## The context of the image build should be the root dir of this repo!!
+ADD solr_collectd.py /opt/collectd-solr/
+ADD urllib_ssl_handler.py /opt/collectd-solr/
+ADD integration-test/20-solr-test.conf /etc/collectd/managed_config/

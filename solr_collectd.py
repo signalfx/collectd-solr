@@ -140,6 +140,7 @@ def configure_callback(conf):
     include_optional_metrics = set()
     ssl_keys = {}
     http_timeout = DEFAULT_API_TIMEOUT
+    testing = False
 
     required_keys = frozenset(('Host', 'Port'))
 
@@ -172,6 +173,8 @@ def configure_callback(conf):
             ssl_keys['ssl_certificate'] = val.values[0]
         elif val.key == 'ssl_ca_certs' and val.values[0]:
             ssl_keys['ssl_ca_certs'] = val.values[0]
+        elif val.key == 'Testing' and val.values[0]:
+            testing = str_to_bool(val.values[0])
 
     for key in required_keys:
         try:
@@ -207,14 +210,20 @@ def configure_callback(conf):
         'plugin_conf': plugin_conf,
         'cluster': cluster,
         'interval': interval,
+        'ssl_keys': ssl_keys,
         'base_url': base_url,
         'opener': opener,
+        'username': username,
+        'password': password,
         'http_timeout': http_timeout,
         'custom_dimensions': custom_dimensions,
         'enhanced_metrics': enhanced_metrics,
         'include_optional_metrics': include_optional_metrics,
         'exclude_optional_metrics': exclude_optional_metrics,
     }
+
+    if testing:
+        return module_config
 
     collectd.register_read(
         read_metrics,
@@ -356,12 +365,14 @@ def fetch_collections_info(data):
         solrCollections = get_data['cluster']['collections'].keys()
         for collection in solrCollections:
             solrShards = get_data['cluster']['collections'][collection]['shards']
+            replica_factor = get_data['cluster']['collections'][collection]['replicationFactor']
             for shard in solrShards.keys():
                 for coreNodes in solrShards[shard]['replicas'].keys():
                     coreNode = solrShards[shard]['replicas'][coreNodes]
                     if 'leader' in coreNode.keys() and coreNode['base_url'] == data['base_url']:
                         collectd.debug('{0} - Solr running in solr_cloud mode'.format(data['member_id']))
                         solr_cloud[collection] = {}
+                        solr_cloud[collection]['repl_factor'] = replica_factor
                         solr_cloud[collection]['leader'] = coreNode['leader']
                         solr_cloud[collection]['core'] = coreNode['core']
                         solr_cloud[collection]['node'] = coreNode['node_name']
