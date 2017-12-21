@@ -304,6 +304,7 @@ def prepare_dimensions(default_dimensions, core=None, solr_cloud=None, collectio
         dimensions['core'] = core
     elif solr_cloud and collection:
         dimensions['collection'] = collection
+        dimensions['repl_factor'] = solr_cloud[collection]['repl_factor']
         dimensions['node'] = solr_cloud[collection]['node']
         dimensions['shard'] = solr_cloud[collection]['shard']
         dimensions['core'] = solr_cloud[collection]['core']
