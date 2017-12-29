@@ -238,20 +238,26 @@ def read_metrics(data):
 
     default_dimensions = data['custom_dimensions']
     collectd.debug("{0} - STARTED FETCHING METRICS".format(data['member_id']))
-    response = fetch_solr_stats(data)
-    if response is None:
-        return None
+    for collection in solr_cloud.keys():
+        response = get_shards_info(data, collection)
+        if response is None:
+            return None
+        dispatch_collection_stats(data, response, default_dimensions, solr_cloud, collection)
 
-    solr_metrics = flatten_dict(response)
-    added_dpm = 0
-    core_dpm = dispatch_core_stats(data, solr_metrics, default_dimensions, solr_cloud)
-    node_dpm = dispatch_node_stats(data, solr_metrics, default_dimensions, solr_cloud)
-
-    if data['enhanced_metrics'] or len(data['include_optional_metrics']) > 0:
-        added_dpm = dispatch_additional_metrics(data, solr_metrics, default_dimensions, solr_cloud)
-
-    collectd.info("Apache Solr - Dispatched {0} data points for {1}".
-                  format(core_dpm+node_dpm+added_dpm, data['member_id']))
+    # response = fetch_solr_stats(data)
+    # if response is None:
+    #     return None
+    #
+    # solr_metrics = flatten_dict(response)
+    # added_dpm = 0
+    # core_dpm = dispatch_core_stats(data, solr_metrics, default_dimensions, solr_cloud)
+    # node_dpm = dispatch_node_stats(data, solr_metrics, default_dimensions, solr_cloud)
+    #
+    # if data['enhanced_metrics'] or len(data['include_optional_metrics']) > 0:
+    #     added_dpm = dispatch_additional_metrics(data, solr_metrics, default_dimensions, solr_cloud)
+    #
+    # collectd.info("Apache Solr - Dispatched {0} data points for {1}".
+    #               format(core_dpm+node_dpm+added_dpm, data['member_id']))
 
 
 def str_to_bool(flag):
@@ -297,17 +303,19 @@ def get_dimension_string(dimensions):
     return dim_str
 
 
-def prepare_dimensions(default_dimensions, core=None, solr_cloud=None, collection=None):
-    dimensions = default_dimensions
+def prepare_dimensions(default_dimensions, core=None, solr_cloud=None, collection=None, shard=None):
+    if len(locals()) == 1:
+        return default_dimensions
 
+    dimensions = default_dimensions
     if 'error' in solr_cloud.keys() and core is not None:
         dimensions['core'] = core
     elif solr_cloud and collection:
         dimensions['collection'] = collection
-        dimensions['repl_factor'] = solr_cloud[collection]['repl_factor']
-        dimensions['node'] = solr_cloud[collection]['node']
-        dimensions['shard'] = solr_cloud[collection]['shard']
-        dimensions['core'] = solr_cloud[collection]['core']
+        dimensions['shard'] = shard
+        dimensions['core'] = core
+        dimensions['node'] = solr_cloud[collection][shard][core]['node']
+        dimensions['leader'] = solr_cloud[collection][shard][core]['leader']
 
     return dimensions
 
@@ -348,6 +356,12 @@ def fetch_solr_stats(data):
     return _api_call(url, data['opener'])
 
 
+def get_shards_info(data, collection):
+    url = '{0}/{1}/select?q=*:*&shards.info=true&wt=json'.format(data['base_url'], collection)
+
+    return _api_call(url, data['opener'])
+
+
 def fetch_collections_info(data):
     """Connect to solr_cloud status page and and return JSON object"""
     url = '{0}/admin/collections?action=CLUSTERSTATUS&wt=json'.format(data['base_url'])
@@ -365,20 +379,24 @@ def fetch_collections_info(data):
             data['custom_dimensions']['cluster'] = data['cluster']
         solrCollections = get_data['cluster']['collections'].keys()
         for collection in solrCollections:
+            solr_cloud[collection] = {}
             solrShards = get_data['cluster']['collections'][collection]['shards']
             replica_factor = get_data['cluster']['collections'][collection]['replicationFactor']
+            solr_cloud[collection]['repl_factor'] = replica_factor
             for shard in solrShards.keys():
+                solr_cloud[collection][shard] = {}
                 for coreNodes in solrShards[shard]['replicas'].keys():
                     coreNode = solrShards[shard]['replicas'][coreNodes]
-                    if 'leader' in coreNode.keys() and coreNode['base_url'] == data['base_url']:
-                        collectd.debug('{0} - Solr running in solr_cloud mode'.format(data['member_id']))
-                        solr_cloud[collection] = {}
-                        solr_cloud[collection]['repl_factor'] = replica_factor
-                        solr_cloud[collection]['leader'] = coreNode['leader']
-                        solr_cloud[collection]['core'] = coreNode['core']
-                        solr_cloud[collection]['node'] = coreNode['node_name']
-                        solr_cloud[collection]['shard'] = shard
-                        solr_cloud[collection]['collection'] = collection
+                    core = coreNode['core']
+                    solr_cloud[collection][shard][core] = {}
+                    # if 'leader' in coreNode.keys() and coreNode['base_url'] == data['base_url']:
+                    #     collectd.debug('{0} - Solr running in solr_cloud mode'.format(data['member_id']))
+                    solr_cloud[collection][shard][core]['node'] = coreNode['node_name']
+                    solr_cloud[collection][shard][core]['base_url'] = coreNode['base_url']
+                    if 'leader' in coreNode.keys():
+                        solr_cloud[collection][shard][core]['leader'] = coreNode['leader']
+                    else:
+                        solr_cloud[collection][shard][core]['leader'] = 'false'
     return solr_cloud
 
 
@@ -452,6 +470,29 @@ def dispatch_additional_metrics(data, solr_metrics, default_dimensions, solr_clo
                 dispatch_value(plugin_instance, metric, solr_metrics[metric], 'gauge', dimensions)
                 dpm_count += 1
     return dpm_count
+
+
+def parse_shard_info(shards_info, shard):
+    shard += '_'
+    for key in shards_info['shards.info'].keys():
+        if shard in key:
+            num_doc = shards_info['shards.info'][key]['numFound']
+            core = shards_info['shards.info'][key]['shardAddress'].split("/")[4]
+            return num_doc, core
+
+
+def dispatch_collection_stats(data, shards_info, default_dimensions, solr_cloud, collection):
+    plugin_instance = data['member_id']
+    metric_name = 'solr.replication_factor'
+    repl_factor = solr_cloud[collection]['repl_factor']
+    dispatch_value(plugin_instance, metric_name, repl_factor, 'gauge', default_dimensions)
+    metric_name = 'solr.shard_cumulative_docs'
+    for shard in solr_cloud[collection].keys():
+        if shard == 'repl_factor':
+            continue
+        num_doc, core = parse_shard_info(shards_info, shard)
+        dimensions = prepare_dimensions(default_dimensions, core, solr_cloud, collection, shard)
+        dispatch_value(plugin_instance, metric_name, num_doc, 'gauge', dimensions)
 
 
 def dispatch_core_stats(data, solr_metrics, default_dimensions, solr_cloud):
