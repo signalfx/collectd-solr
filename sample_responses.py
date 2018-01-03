@@ -90,6 +90,208 @@ collections = {
     }
 }
 
+overseer = {
+    "responseHeader": {
+        "status": 0,
+        "QTime": 10
+    },
+    "leader": "172.31.34.16:8983_solr",
+    "overseer_queue_size": 0,
+    "overseer_work_queue_size": 0,
+    "overseer_collection_queue_size": 2,
+    "overseer_operations": [
+        "leader",
+        {
+            "requests": 61,
+            "errors": 0,
+            "avgRequestsPerSecond": 0.00012761992036317075,
+            "5minRateRequestsPerSecond": 1.4821969375e-313,
+            "15minRateRequestsPerSecond": 2.7550721534436908e-210,
+            "avgTimePerRequest": 0.056257790750365314,
+            "medianRequestTime": 0.065204,
+            "75thPcRequestTime": 0.066877,
+            "95thPcRequestTime": 0.077564,
+            "99thPcRequestTime": 0.077564,
+            "999thPcRequestTime": 0.091823
+        }
+    ]
+}
+
+shards_info = {
+  "responseHeader": {
+    "zkConnected": "true",
+    "status": 0,
+    "QTime": 5,
+    "params": {
+      "q": "*:*",
+      "shards.info": "true",
+      "wt": "json"
+    }
+  },
+  "shards.info": {
+    "http://172.31.45.252:7574/solr/cfxlabs_shard2_replica1/|http://172.31.45.252:7575/solr/cfxlabs_shard2_replica2/": {
+      "numFound": 21,
+      "maxScore": 1,
+      "shardAddress": "http://172.31.45.252:7574/solr/cfxlabs_shard2_replica1",
+      "time": 2
+    },
+    "http://172.31.45.252:8984/solr/cfxlabs_shard1_replica1/|http://172.31.45.252:8983/solr/cfxlabs_shard1_replica2/": {
+      "numFound": 15,
+      "maxScore": 1,
+      "shardAddress": "http://172.31.45.252:8984/solr/cfxlabs_shard1_replica1",
+      "time": 2
+    }
+  },
+  "response": {
+    "numFound": 36,
+    "start": 0,
+    "maxScore": 1,
+    "docs": [
+      {
+        "id": "SP2514N",
+        "name": [
+          "Samsung SpinPoint P120 SP2514N - hard drive - 250 GB - ATA-133"
+        ],
+        "manu": [
+          "Samsung Electronics Co. Ltd."
+        ],
+        "manu_id_s": "samsung",
+        "cat": [
+          "electronics",
+          "hard drive"
+        ],
+        "features": [
+          "7200RPM, 8MB cache, IDE Ultra ATA-133",
+          "NoiseGuard, SilentSeek technology, Fluid Dynamic Bearing (FDB) motor"
+        ],
+        "price": [
+          92
+        ],
+        "popularity": [
+          6
+        ],
+        "inStock": [
+          "true"
+        ],
+        "manufacturedate_dt": "2006-02-13T15:26:37Z",
+        "store": [
+          "35.0752,-97.032"
+        ],
+        "_version_": 1586194703158608000
+      },
+      {
+        "id": "6H500F0",
+        "name": [
+          "Maxtor DiamondMax 11 - hard drive - 500 GB - SATA-300"
+        ],
+        "manu": [
+          "Maxtor Corp."
+        ],
+        "manu_id_s": "maxtor",
+        "cat": [
+          "electronics",
+          "hard drive"
+        ],
+        "features": [
+          "SATA 3.0Gb/s, NCQ",
+          "8.5ms seek",
+          "16MB cache"
+        ],
+        "price": [
+          350
+        ],
+        "popularity": [
+          6
+        ],
+        "inStock": [
+          "true"
+        ],
+        "store": [
+          "45.17614,-93.87341"
+        ],
+        "manufacturedate_dt": "2006-02-13T15:26:37Z",
+        "_version_": 1586194703571746800
+      },
+      {
+        "id": "F8V7067-APL-KIT",
+        "name": [
+          "Belkin Mobile Power Cord for iPod w/ Dock"
+        ],
+        "manu": [
+          "Belkin"
+        ],
+        "manu_id_s": "belkin",
+        "cat": [
+          "electronics",
+          "connector"
+        ],
+        "features": [
+          "car power adapter, white"
+        ],
+        "weight": [
+          4
+        ],
+        "price": [
+          19.95
+        ],
+        "popularity": [
+          1
+        ],
+        "inStock": [
+          "false"
+        ],
+        "store": [
+          "45.18014,-93.87741"
+        ],
+        "manufacturedate_dt": "2005-08-01T16:30:25Z",
+        "_version_": 1586194705123639300
+      },
+      {
+        "id": "apple",
+        "compName_s": "Apple",
+        "address_s": "1 Infinite Way, Cupertino CA",
+        "_version_": 1586194706938724400
+      },
+      {
+        "id": "ati",
+        "compName_s": "ATI Technologies",
+        "address_s": "33 Commerce Valley Drive East Thornhill, ON L3T 7N6 Canada",
+        "_version_": 1586194706942918700
+      },
+      {
+        "id": "canon",
+        "compName_s": "Canon, Inc.",
+        "address_s": "One Canon Plaza Lake Success, NY 11042",
+        "_version_": 1586194707013173200
+      },
+      {
+        "id": "corsair",
+        "compName_s": "Corsair Microsystems",
+        "address_s": "46221 Landing Parkway Fremont, CA 94538",
+        "_version_": 1586194707016319000
+      },
+      {
+        "id": "dell",
+        "compName_s": "Dell, Inc.",
+        "address_s": "One Dell Way Round Rock, Texas 78682",
+        "_version_": 1586194707017367600
+      },
+      {
+        "id": "samsung",
+        "compName_s": "Samsung Electronics Co. Ltd.",
+        "address_s": "105 Challenger Rd. Ridgefield Park, NJ 07660-0511",
+        "_version_": 1586194707019464700
+      },
+      {
+        "id": "viewsonic",
+        "compName_s": "ViewSonic Corp",
+        "address_s": "381 Brea Canyon Road Walnut, CA 91789-0708",
+        "_version_": 1586194707020513300
+      }
+    ]
+  }
+}
+
 cores = {
     "responseHeader": {
         "status": 0,

@@ -1,9 +1,9 @@
+#!/usr/bin/env python
 import collections
 import mock
 import sys
 import pytest
 import sample_responses
-import solr_collectd
 
 
 class MockCollectd(mock.MagicMock):
@@ -19,9 +19,11 @@ class MockCollectd(mock.MagicMock):
 
 sys.modules['collectd'] = MockCollectd()
 
+import solr_collectd
+
 
 def mock_api_call(url, opener=None):
-    if '/collections' in url:
+    if '=CLUSTERSTATUS' in url:
         return sample_responses.collections
 
     if '/cores' in url:
@@ -29,6 +31,12 @@ def mock_api_call(url, opener=None):
 
     if '/metrics' in url:
         return sample_responses.metrics
+
+    if '=OVERSEERSTATUS' in url:
+        return sample_responses.overseer
+
+    if 'shards.info=' in url:
+        return sample_responses.shards_info
 
 
 ConfigOption = collections.namedtuple('ConfigOption', ('key', 'values'))
