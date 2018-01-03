@@ -4,7 +4,7 @@ import json
 from time import time, sleep
 from subprocess import call
 
-# Quick and dirty integration test for multiple broker support for etcd for
+# Quick and dirty integration test for multiple broker support for solr for
 # one collectd instance. This test script is intended to be run with
 # docker-compose with the provided docker-compose.yml configuration.
 
@@ -14,7 +14,7 @@ from subprocess import call
 SOLR_HOSTS = [
     'solr101',
 ]
-TIMEOUT_SECS = 60
+TIMEOUT_SECS = 180
 
 
 def get_metric_data():
