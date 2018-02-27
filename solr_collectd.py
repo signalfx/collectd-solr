@@ -249,12 +249,11 @@ def read_metrics(data):
         return None
 
     solr_metrics = flatten_dict(response)
-    added_dpm = 0
-    core_dpm = dispatch_core_stats(data, solr_metrics, default_dimensions, solr_cloud)
-    node_dpm = dispatch_node_stats(data, solr_metrics, default_dimensions)
+    dispatch_core_stats(data, solr_metrics, default_dimensions, solr_cloud)
+    dispatch_node_stats(data, solr_metrics, default_dimensions)
 
     if data['enhanced_metrics'] or len(data['include_optional_metrics']) > 0:
-        added_dpm = dispatch_additional_metrics(data, solr_metrics, default_dimensions)
+        dispatch_additional_metrics(data, solr_metrics, default_dimensions)
 
 
 def str_to_bool(flag):
