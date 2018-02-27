@@ -256,9 +256,6 @@ def read_metrics(data):
     if data['enhanced_metrics'] or len(data['include_optional_metrics']) > 0:
         added_dpm = dispatch_additional_metrics(data, solr_metrics, default_dimensions)
 
-    collectd.info("Apache Solr - Dispatched {0} data points for {1}".
-                  format(core_dpm+node_dpm+added_dpm, data['member_id']))
-
 
 def str_to_bool(flag):
     """Converts true/false to boolean"""
