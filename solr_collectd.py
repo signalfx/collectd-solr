@@ -32,6 +32,8 @@ CORE_METRICS = {
         Metric('solr.document_cache_cumulative_hitratio', 'gauge'),
     'CACHE.searcher.fieldValueCache.cumulative_hitratio':
         Metric('solr.field_value_cache_cumulative_hitratio', 'gauge'),
+    'CACHE.searcher.filterCache.cumulative_hitratio':
+        Metric('solr.filter_cache_cumulative_hitratio', 'gauge'),
     'CACHE.searcher.queryResultCache.cumulative_hitratio':
         Metric('solr.query_result_cache_cumulative_hitratio', 'gauge'),
     'QUERY./select.requestTimes.mean_ms':
