@@ -1,8 +1,8 @@
 #!/usr/bin/env python
-import httplib
+import http.client
 import json
-from time import time, sleep
 from subprocess import call
+from time import sleep, time
 
 # Quick and dirty integration test for multiple broker support for solr for
 # one collectd instance. This test script is intended to be run with
@@ -11,15 +11,13 @@ from subprocess import call
 # This is not very flexible but could be expanded to support other types of
 # integration tests if so desired.
 
-SOLR_HOSTS = [
-    'solr101',
-]
+SOLR_HOSTS = ["solr6"]
 TIMEOUT_SECS = 180
 
 
 def get_metric_data():
     # Use httplib instead of requests so we don't have to install stuff with pip
-    conn = httplib.HTTPConnection("fake_sfx", 8080)
+    conn = http.client.HTTPConnection("fake_sfx", 8080)
     conn.request("GET", "/")
     resp = conn.getresponse()
     a = resp.read()
@@ -28,12 +26,14 @@ def get_metric_data():
 
 def wait_for_metrics():
     start = time()
-    plugin = 'solr'
+    plugin = "solr"
 
-    print "waiting for metrics from plugin {0}".format(plugin)
-    eventually_true(lambda: any([plugin in m.get('plugin').split(':')[0] for m in get_metric_data()]),
-                    TIMEOUT_SECS - (time() - start))
-    print 'Found!'
+    print("waiting for metrics from plugin {0}".format(plugin))
+    eventually_true(
+        lambda: any([plugin in m.get("plugin").split(":")[0] for m in get_metric_data()]),
+        TIMEOUT_SECS - (time() - start),
+    )
+    print("Found!")
 
 
 def eventually_true(f, timeout_secs):

@@ -9,22 +9,19 @@ services:
       SF_INGEST_HOST: fake_sfx
     depends_on:
       - fake_sfx
-      - solr101
+      - solr6
 
 
-  collectdamazon2017:
-    build:
-      context: ..
-      dockerfile: integration-test/Dockerfile.collectd.amazon2017.03
-    depends_on:
-      - fake_sfx
-      - solr101
-
-  solr101:
+  solr6:
     image: solr:6.6
     ports:
       - "8983:8983"
-    command: /opt/solr/bin/solr -e cloud -noprompt
+    command:
+      - -f
+      - -e
+      - cloud
+      - -cloud
+      - -noprompt
 
   fake_sfx:
     build:
@@ -37,10 +34,3 @@ services:
       dockerfile: Dockerfile.test
     depends_on:
       - collectd
-
-  test26: # this is to test that python2.6 works (because collectd is linked to 2.6 on amazon)
-    build:
-      context: .
-      dockerfile: Dockerfile.test
-    depends_on:
-      - collectdamazon2017
