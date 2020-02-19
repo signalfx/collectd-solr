@@ -12,7 +12,7 @@ An apache solr [collectd](http://www.collectd.org/) plugin which users can use t
 
 * collectd 4.9 or later (for the Python plugin)
 * Python 2.6 or later
-* solr 6.6 or later
+* solr 7.7.x or later
 
 ## Configuration
 The following are required configuration keys:

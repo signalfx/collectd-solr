@@ -198,7 +198,7 @@ def read_metrics(data):
     default_dimensions = data["custom_dimensions"]
     collectd.debug("{0} - STARTED FETCHING METRICS".format(data["member_id"]))
     if data["member_id"] + "_solr" == get_leader_node(data):
-        for collection in list(solr_cloud.keys()):
+        for collection in solr_cloud:
             response = get_shards_info(data, collection) if collection != "live_nodes" else None
             if response is not None:
                 dispatch_collection_stats(data, response, default_dimensions, solr_cloud, collection)
@@ -249,7 +249,7 @@ def dispatch_value(instance, key, value, value_type, dimensions=None):
 def get_dimension_string(dimensions):
     dim_str = ""
     if dimensions:
-        dim_str = ",".join(["=".join(d) for d in list(dimensions.items())])
+        dim_str = ",".join(["=".join(d) for d in dimensions.items()])
 
     return dim_str
 
@@ -259,7 +259,7 @@ def prepare_dimensions(default_dimensions, core=None, solr_cloud=None, collectio
         return default_dimensions
 
     dimensions = default_dimensions
-    if "error" in list(solr_cloud.keys()) and core is not None:
+    if "error" in solr_cloud and core is not None:
         dimensions["core"] = core
     elif solr_cloud and collection:
         dimensions["collection"] = collection
@@ -302,7 +302,7 @@ def get_cores(data):
 
 def fetch_solr_stats(data):
     """Connect to Solr stat page and and return JSON object"""
-    url = "{0}/admin/metrics?wt=json&type=all&group=all".format(data["base_url"])
+    url = "{0}/admin/metrics?wt=json&type=all&group=all&compact=false".format(data["base_url"])
 
     return _api_call(url, data["opener"])
 
@@ -329,20 +329,20 @@ def fetch_collections_info(data):
     if get_data is None:
         collectd.error("solr_collectd plugin: can't get info")
         solr_cloud["error"] = "Solr instance is not running in solr_cloud mode"
-    elif "error" in list(get_data.keys()):
+    elif "error" in get_data:
         collectd.warning("%s" % get_data["error"]["msg"])
         solr_cloud["error"] = get_data["error"]["msg"]
-    elif "cluster" in list(get_data.keys()):
+    elif "cluster" in get_data:
         if "cluster" not in data["custom_dimensions"]:
             data["custom_dimensions"]["cluster"] = data["cluster"]
         solr_cloud["live_nodes"] = get_data["cluster"]["live_nodes"]
-        solrCollections = list(get_data["cluster"]["collections"].keys())
+        solrCollections = get_data["cluster"]["collections"]
         for collection in solrCollections:
             solr_cloud[collection] = {}
             solrShards = get_data["cluster"]["collections"][collection]["shards"]
-            for shard in list(solrShards.keys()):
+            for shard in solrShards.keys():
                 solr_cloud[collection][shard] = {}
-                for coreNodes in list(solrShards[shard]["replicas"].keys()):
+                for coreNodes in solrShards[shard]["replicas"]:
                     coreNode = solrShards[shard]["replicas"][coreNodes]
                     core = coreNode["core"]
                     solr_cloud[collection][shard][core] = {}
@@ -350,7 +350,7 @@ def fetch_collections_info(data):
                     #     collectd.debug('{0} - Solr running in solr_cloud mode'.format(data['member_id']))
                     solr_cloud[collection][shard][core]["node"] = coreNode["node_name"]
                     solr_cloud[collection][shard][core]["base_url"] = coreNode["base_url"]
-                    if "leader" in list(coreNode.keys()):
+                    if "leader" in coreNode:
                         solr_cloud[collection][shard][core]["leader"] = coreNode["leader"]
                     else:
                         solr_cloud[collection][shard][core]["leader"] = "false"
@@ -400,10 +400,10 @@ def dispatch_additional_metrics(data, solr_metrics, default_dimensions):
     default_dimensions["node"] = data["member_id"] + "_solr"
 
     if data["enhanced_metrics"]:
-        for metric in list(ENHANCED_METRICS.keys()):
+        for metric in ENHANCED_METRICS:
             if metric in data["exclude_optional_metrics"]:
                 continue
-            if metric in list(solr_metrics.keys()):
+            if metric in solr_metrics:
                 dispatch_value(
                     plugin_instance,
                     ENHANCED_METRICS[metric].name,
@@ -414,7 +414,7 @@ def dispatch_additional_metrics(data, solr_metrics, default_dimensions):
                 dpm_count += 1
     else:
         for metric in data["include_optional_metrics"]:
-            if metric in list(solr_metrics.keys()):
+            if metric in solr_metrics:
                 dispatch_value(plugin_instance, metric, solr_metrics[metric], "gauge", default_dimensions)
                 dpm_count += 1
     return dpm_count
@@ -422,7 +422,7 @@ def dispatch_additional_metrics(data, solr_metrics, default_dimensions):
 
 def parse_shard_info(shards_info, shard):
     shard += "_"
-    for key in list(shards_info["shards.info"].keys()):
+    for key in shards_info["shards.info"]:
         if shard in key:
             num_doc = shards_info["shards.info"][key]["numFound"]
             core = shards_info["shards.info"][key]["shardAddress"].split("/")[4]
@@ -431,7 +431,7 @@ def parse_shard_info(shards_info, shard):
 
 def parse_corename(collection, shard, core_val):
     replica = core_val.split("_")[-1]
-    core = "{0}.{1}.{2}".format(collection, shard, replica)
+    core = "{0}.{1}.replica_{2}".format(collection, shard, replica)
 
     return core
 
@@ -439,7 +439,7 @@ def parse_corename(collection, shard, core_val):
 def dispatch_collection_stats(data, shards_info, default_dimensions, solr_cloud, collection):
     plugin_instance = data["member_id"]
     metric_name = "solr.shard_cumulative_docs"
-    for shard in list(solr_cloud[collection].keys()):
+    for shard in solr_cloud[collection]:
         num_doc, core = parse_shard_info(shards_info, shard)
         dimensions = prepare_dimensions(default_dimensions, core, solr_cloud, collection, shard)
         dispatch_value(plugin_instance, metric_name, num_doc, "gauge", dimensions)
@@ -448,19 +448,19 @@ def dispatch_collection_stats(data, shards_info, default_dimensions, solr_cloud,
 def dispatch_core_stats(data, solr_metrics, default_dimensions, solr_cloud):
     plugin_instance = data["member_id"]
     dpm_count = 0
-    cores = get_cores(data) if "error" in list(solr_cloud.keys()) else None
+    cores = get_cores(data) if "error" in solr_cloud else None
 
-    for key in list(solr_cloud.keys()) if cores is None else cores:
+    for key in solr_cloud if cores is None else cores:
         if key == "live_nodes":
             continue
-        for shard in list(solr_cloud[key].keys()):
-            for core_val in list(solr_cloud[key][shard].keys()):
+        for shard in solr_cloud[key]:
+            for core_val in solr_cloud[key][shard]:
                 core = parse_corename(key, shard, core_val) if cores is None else key
-                for cmetric in list(CORE_METRICS.keys()):
+                for cmetric in CORE_METRICS:
                     metric = "metrics.solr.core.{0}.{1}".format(core, cmetric)
                     if metric in data["exclude_optional_metrics"]:
                         continue
-                    if metric in list(solr_metrics.keys()):
+                    if metric in solr_metrics:
                         dimensions = prepare_dimensions(default_dimensions, core_val, solr_cloud, key, shard)
                         dispatch_value(
                             plugin_instance,
@@ -479,14 +479,14 @@ def dispatch_node_stats(data, solr_metrics, default_dimensions):
     default_dimensions["node"] = data["member_id"] + "_solr"
 
     for registry in ("node", "jetty", "jvm"):
-        for nmetric in list(NODE_METRICS[registry].keys()):
+        for nmetric in NODE_METRICS[registry]:
             if registry == "jetty":
                 metric = "metrics.solr.jetty.org.eclipse.jetty.server.handler.{0}".format(nmetric)
             else:
                 metric = "metrics.solr.{0}.{1}".format(registry, nmetric)
             if metric in data["exclude_optional_metrics"]:
                 continue
-            if metric in list(solr_metrics.keys()):
+            if metric in solr_metrics:
                 dispatch_value(
                     plugin_instance,
                     NODE_METRICS[registry][nmetric].name,

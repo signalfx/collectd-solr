@@ -13,7 +13,7 @@ collections = {
                         "state": "active",
                         "replicas": {
                             "core_node1": {
-                                "core": "demo_collection_shard1_replica1",
+                                "core": "demo_collection_shard1_replica_n1",
                                 "base_url": "http://172.31.45.252:7575/solr",
                                 "node_name": "172.31.45.252:7575_solr",
                                 "state": "active",
@@ -38,13 +38,13 @@ collections = {
                         "state": "active",
                         "replicas": {
                             "core_node1": {
-                                "core": "cfxlabs_shard1_replica2",
+                                "core": "cfxlabs_shard1_replica_n2",
                                 "base_url": "http://172.31.45.252:8983/solr",
                                 "node_name": "172.31.45.252:8983_solr",
                                 "state": "active"
                             },
                             "core_node4": {
-                                "core": "cfxlabs_shard1_replica1",
+                                "core": "cfxlabs_shard1_replica_n1",
                                 "base_url": "http://172.31.45.252:7575/solr",
                                 "node_name": "172.31.45.252:7575_solr",
                                 "state": "active",
@@ -57,14 +57,14 @@ collections = {
                         "state": "active",
                         "replicas": {
                             "core_node2": {
-                                "core": "cfxlabs_shard2_replica1",
+                                "core": "cfxlabs_shard2_replica_n1",
                                 "base_url": "http://172.31.45.252:8984/solr",
                                 "node_name": "172.31.45.252:8984_solr",
                                 "state": "active",
                                 "leader": "true"
                             },
                             "core_node3": {
-                                "core": "cfxlabs_shard2_replica2",
+                                "core": "cfxlabs_shard2_replica_n2",
                                 "base_url": "http://172.31.45.252:7574/solr",
                                 "node_name": "172.31.45.252:7574_solr",
                                 "state": "active"
@@ -129,16 +129,16 @@ shards_info = {
     }
   },
   "shards.info": {
-    "http://172.31.45.252:7574/solr/cfxlabs_shard2_replica1/|http://172.31.45.252:7575/solr/cfxlabs_shard2_replica2/": {
+    "http://172.31.45.252:7574/solr/cfxlabs_shard2_replica_n1/|http://172.31.45.252:7575/solr/cfxlabs_shard2_replica_n2/": {
       "numFound": 21,
       "maxScore": 1,
-      "shardAddress": "http://172.31.45.252:7574/solr/cfxlabs_shard2_replica1",
+      "shardAddress": "http://172.31.45.252:7574/solr/cfxlabs_shard2_replica_n1",
       "time": 2
     },
-    "http://172.31.45.252:8984/solr/cfxlabs_shard1_replica1/|http://172.31.45.252:8983/solr/cfxlabs_shard1_replica2/": {
+    "http://172.31.45.252:8984/solr/cfxlabs_shard1_replica_n1/|http://172.31.45.252:8983/solr/cfxlabs_shard1_replica_n2/": {
       "numFound": 15,
       "maxScore": 1,
-      "shardAddress": "http://172.31.45.252:8984/solr/cfxlabs_shard1_replica1",
+      "shardAddress": "http://172.31.45.252:8984/solr/cfxlabs_shard1_replica_n1",
       "time": 2
     }
   },
@@ -299,10 +299,10 @@ cores = {
     },
     "initFailures": {},
     "status": {
-        "cfxlabs_shard1_replica1": {
-            "name": "cfxlabs_shard1_replica1",
-            "instanceDir": "/opt/solr/example/cloud/node4/solr/cfxlabs_shard1_replica1",
-            "dataDir": "/opt/solr/example/cloud/node4/solr/cfxlabs_shard1_replica1/data/",
+        "cfxlabs_shard1_replica_n1": {
+            "name": "cfxlabs_shard1_replica_n1",
+            "instanceDir": "/opt/solr/example/cloud/node4/solr/cfxlabs_shard1_replica_n1",
+            "dataDir": "/opt/solr/example/cloud/node4/solr/cfxlabs_shard1_replica_n1/data/",
             "config": "solrconfig.xml",
             "schema": "managed-schema",
             "startTime": "2017-11-28T06:27:10.029Z",
@@ -323,7 +323,7 @@ cores = {
                 "segmentCount": 4,
                 "current": "true",
                 "hasDeletions": "false",
-                "directory": "org.apache.lucene.store.NRTCachingDirectory:NRTCachingDirectory(MMapDirectory@/opt/solr-6.6.2/example/cloud/node4/solr/cfxlabs_shard1_replica1/data/index lockFactory=org.apache.lucene.store.NativeFSLockFactory@63ac848d; maxCacheMB=48.0 maxMergeSizeMB=4.0)",
+                "directory": "org.apache.lucene.store.NRTCachingDirectory:NRTCachingDirectory(MMapDirectory@/opt/solr-6.6.2/example/cloud/node4/solr/cfxlabs_shard1_replica_n1/data/index lockFactory=org.apache.lucene.store.NativeFSLockFactory@63ac848d; maxCacheMB=48.0 maxMergeSizeMB=4.0)",
                 "segmentsFile": "segments_3",
                 "segmentsFileSizeInBytes": 351,
                 "userData": {
@@ -334,10 +334,10 @@ cores = {
                 "size": "34.7 KB"
             }
         },
-        "demo_collection_shard1_replica1": {
-            "name": "demo_collection_shard1_replica1",
-            "instanceDir": "/opt/solr/example/cloud/node4/solr/demo_collection_shard1_replica1",
-            "dataDir": "/opt/solr/example/cloud/node4/solr/demo_collection_shard1_replica1/data/",
+        "demo_collection_shard1_replica_n1": {
+            "name": "demo_collection_shard1_replica_n1",
+            "instanceDir": "/opt/solr/example/cloud/node4/solr/demo_collection_shard1_replica_n1",
+            "dataDir": "/opt/solr/example/cloud/node4/solr/demo_collection_shard1_replica_n1/data/",
             "config": "solrconfig.xml",
             "schema": "managed-schema",
             "startTime": "2017-12-19T16:29:31.817Z",
@@ -358,7 +358,7 @@ cores = {
                 "segmentCount": 1,
                 "current": "true",
                 "hasDeletions": "false",
-                "directory": "org.apache.lucene.store.NRTCachingDirectory:NRTCachingDirectory(MMapDirectory@/opt/solr-6.6.2/example/cloud/node4/solr/demo_collection_shard1_replica1/data/index lockFactory=org.apache.lucene.store.NativeFSLockFactory@63ac848d; maxCacheMB=48.0 maxMergeSizeMB=4.0)",
+                "directory": "org.apache.lucene.store.NRTCachingDirectory:NRTCachingDirectory(MMapDirectory@/opt/solr-6.6.2/example/cloud/node4/solr/demo_collection_shard1_replica_n1/data/index lockFactory=org.apache.lucene.store.NativeFSLockFactory@63ac848d; maxCacheMB=48.0 maxMergeSizeMB=4.0)",
                 "segmentsFile": "segments_2",
                 "segmentsFileSizeInBytes": 165,
                 "userData": {
@@ -660,7 +660,7 @@ metrics = {
                 "value": 0.0002
             }
         },
-        "solr.core.demo_collection.shard1.replica1": {
+        "solr.core.demo_collection.shard1.replica_n1": {
             "ADMIN./admin/file.clientErrors": {
                 "count": 0,
                 "meanRate": 0,
@@ -1365,14 +1365,14 @@ metrics = {
             },
             "CORE.aliases": {
                 "value": [
-                    "demo_collection_shard1_replica1"
+                    "demo_collection_shard1_replica_n1"
                 ]
             },
             "CORE.collection": {
                 "value": "demo_collection"
             },
             "CORE.coreName": {
-                "value": "demo_collection_shard1_replica1"
+                "value": "demo_collection_shard1_replica_n1"
             },
             "CORE.fs.totalSpace": {
                 "value": 8318783488
@@ -1381,10 +1381,10 @@ metrics = {
                 "value": 5051539456
             },
             "CORE.indexDir": {
-                "value": "/opt/solr/example/cloud/node4/solr/demo_collection_shard1_replica1/data/index/"
+                "value": "/opt/solr/example/cloud/node4/solr/demo_collection_shard1_replica_n1/data/index/"
             },
             "CORE.instanceDir": {
-                "value": "/opt/solr/example/cloud/node4/solr/demo_collection_shard1_replica1"
+                "value": "/opt/solr/example/cloud/node4/solr/demo_collection_shard1_replica_n1"
             },
             "CORE.refCount": {
                 "value": 1
@@ -1945,7 +1945,7 @@ metrics = {
             "SEARCHER.searcher": {
                 "value": {
                     "numDocs": 10,
-                    "searcherName": "Searcher@59b89e32[demo_collection_shard1_replica1] main",
+                    "searcherName": "Searcher@59b89e32[demo_collection_shard1_replica_n1] main",
                     "reader": "ExitableDirectoryReader(UninvertingDirectoryReader(Uninverting(_0(6.6.2):C10)))",
                     "deletedDocs": 0,
                     "registeredAt": "2017-12-19T16:29:31.953Z",
@@ -1953,7 +1953,7 @@ metrics = {
                     "indexVersion": 6,
                     "warmupTime": 0,
                     "caching": "true",
-                    "readerDir": "org.apache.lucene.store.NRTCachingDirectory:NRTCachingDirectory(MMapDirectory@/opt/solr-6.6.2/example/cloud/node4/solr/demo_collection_shard1_replica1/data/index lockFactory=org.apache.lucene.store.NativeFSLockFactory@63ac848d; maxCacheMB=48.0 maxMergeSizeMB=4.0)",
+                    "readerDir": "org.apache.lucene.store.NRTCachingDirectory:NRTCachingDirectory(MMapDirectory@/opt/solr-6.6.2/example/cloud/node4/solr/demo_collection_shard1_replica_n1/data/index lockFactory=org.apache.lucene.store.NativeFSLockFactory@63ac848d; maxCacheMB=48.0 maxMergeSizeMB=4.0)",
                     "openedAt": "2017-12-19T16:29:31.952Z"
                 }
             },
@@ -2325,7 +2325,7 @@ metrics = {
                 "15minRate": 0
             }
         },
-        "solr.core.cfxlabs.shard1.replica1": {
+        "solr.core.cfxlabs.shard1.replica_n1": {
             "ADMIN./admin/file.clientErrors": {
                 "count": 0,
                 "meanRate": 0,
@@ -3014,14 +3014,14 @@ metrics = {
             },
             "CORE.aliases": {
                 "value": [
-                    "cfxlabs_shard1_replica1"
+                    "cfxlabs_shard1_replica_n1"
                 ]
             },
             "CORE.collection": {
                 "value": "cfxlabs"
             },
             "CORE.coreName": {
-                "value": "cfxlabs_shard1_replica1"
+                "value": "cfxlabs_shard1_replica_n1"
             },
             "CORE.fs.totalSpace": {
                 "value": 8318783488
@@ -3030,10 +3030,10 @@ metrics = {
                 "value": 5051539456
             },
             "CORE.indexDir": {
-                "value": "/opt/solr/example/cloud/node4/solr/cfxlabs_shard1_replica1/data/index/"
+                "value": "/opt/solr/example/cloud/node4/solr/cfxlabs_shard1_replica_n1/data/index/"
             },
             "CORE.instanceDir": {
-                "value": "/opt/solr/example/cloud/node4/solr/cfxlabs_shard1_replica1"
+                "value": "/opt/solr/example/cloud/node4/solr/cfxlabs_shard1_replica_n1"
             },
             "CORE.refCount": {
                 "value": 1
@@ -3616,7 +3616,7 @@ metrics = {
             "SEARCHER.searcher": {
                 "value": {
                     "numDocs": 15,
-                    "searcherName": "Searcher@712e966[cfxlabs_shard1_replica1] main",
+                    "searcherName": "Searcher@712e966[cfxlabs_shard1_replica_n1] main",
                     "reader": "ExitableDirectoryReader(UninvertingDirectoryReader(Uninverting(_0(6.6.2):C1) Uninverting(_1(6.6.2):C6) Uninverting(_2(6.6.2):C7) Uninverting(_3(6.6.2):C1)))",
                     "deletedDocs": 0,
                     "registeredAt": "2017-12-08T06:17:39.119Z",
@@ -3624,7 +3624,7 @@ metrics = {
                     "indexVersion": 14,
                     "warmupTime": 0,
                     "caching": "true",
-                    "readerDir": "org.apache.lucene.store.NRTCachingDirectory:NRTCachingDirectory(MMapDirectory@/opt/solr-6.6.2/example/cloud/node4/solr/cfxlabs_shard1_replica1/data/index lockFactory=org.apache.lucene.store.NativeFSLockFactory@63ac848d; maxCacheMB=48.0 maxMergeSizeMB=4.0)",
+                    "readerDir": "org.apache.lucene.store.NRTCachingDirectory:NRTCachingDirectory(MMapDirectory@/opt/solr-6.6.2/example/cloud/node4/solr/cfxlabs_shard1_replica_n1/data/index lockFactory=org.apache.lucene.store.NativeFSLockFactory@63ac848d; maxCacheMB=48.0 maxMergeSizeMB=4.0)",
                     "openedAt": "2017-12-08T06:17:39.118Z"
                 }
             },
@@ -4724,7 +4724,7 @@ metrics = {
             "QUERY.httpShardHandler.availableConnections": {
                 "value": 0
             },
-            "QUERY.httpShardHandler.http://172.31.45.252:7574/solr/cfxlabs_shard2_replica2/select.post.requests": {
+            "QUERY.httpShardHandler.http://172.31.45.252:7574/solr/cfxlabs_shard2_replica_n2/select.post.requests": {
                 "count": 1484,
                 "meanRate": 0.020044490450344333,
                 "1minRate": 2.964393875e-314,
@@ -4740,7 +4740,7 @@ metrics = {
                 "p99_ms": 4.101323,
                 "p999_ms": 5.012648
             },
-            "QUERY.httpShardHandler.http://172.31.45.252:7575/solr/cfxlabs_shard1_replica1/select.post.requests": {
+            "QUERY.httpShardHandler.http://172.31.45.252:7575/solr/cfxlabs_shard1_replica_n1/select.post.requests": {
                 "count": 1153,
                 "meanRate": 0.015573651198002064,
                 "1minRate": 2.964393875e-314,
@@ -4756,7 +4756,7 @@ metrics = {
                 "p99_ms": 4.311329,
                 "p999_ms": 4.311329
             },
-            "QUERY.httpShardHandler.http://172.31.45.252:8983/solr/cfxlabs_shard1_replica2/select.post.requests": {
+            "QUERY.httpShardHandler.http://172.31.45.252:8983/solr/cfxlabs_shard1_replica_n2/select.post.requests": {
                 "count": 1169,
                 "meanRate": 0.015837452646483077,
                 "1minRate": 2.964393875e-314,
@@ -4772,7 +4772,7 @@ metrics = {
                 "p99_ms": 2.728027,
                 "p999_ms": 24.117232
             },
-            "QUERY.httpShardHandler.http://172.31.45.252:8984/solr/cfxlabs_shard2_replica1/select.post.requests": {
+            "QUERY.httpShardHandler.http://172.31.45.252:8984/solr/cfxlabs_shard2_replica_n1/select.post.requests": {
                 "count": 790,
                 "meanRate": 0.01067474319003817,
                 "1minRate": 2.964393875e-314,
@@ -4830,7 +4830,7 @@ metrics = {
                 "5minRate": 9.732887908759746e-97,
                 "15minRate": 1.1554256735600753e-32
             },
-            "UPDATE.updateShardHandler./solr/cfxlabs_shard2_replica2/admin/mbeans.get.requests": {
+            "UPDATE.updateShardHandler./solr/cfxlabs_shard2_replica_n2/admin/mbeans.get.requests": {
                 "count": 5,
                 "meanRate": 0.000054849488914383354,
                 "1minRate": 2.964393875e-314,
@@ -4849,7 +4849,7 @@ metrics = {
             "UPDATE.updateShardHandler.availableConnections": {
                 "value": 0
             },
-            "UPDATE.updateShardHandler.http://172.31.45.252:8983/solr/cfxlabs_shard1_replica2/get.post.requests": {
+            "UPDATE.updateShardHandler.http://172.31.45.252:8983/solr/cfxlabs_shard1_replica_n2/get.post.requests": {
                 "count": 1,
                 "meanRate": 5.195120895486107e-7,
                 "1minRate": 2.964393875e-314,
@@ -4865,7 +4865,7 @@ metrics = {
                 "p99_ms": 24.717901,
                 "p999_ms": 24.717901
             },
-            "UPDATE.updateShardHandler.http://172.31.45.252:8983/solr/cfxlabs_shard1_replica2/update.post.requests": {
+            "UPDATE.updateShardHandler.http://172.31.45.252:8983/solr/cfxlabs_shard1_replica_n2/update.post.requests": {
                 "count": 12,
                 "meanRate": 0.000011297732048199718,
                 "1minRate": 2.964393875e-314,
