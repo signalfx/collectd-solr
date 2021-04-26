@@ -317,6 +317,8 @@ def get_leader_node(data):
     url = "{0}/admin/collections?action=OVERSEERSTATUS&wt=json".format(data["base_url"])
     response = _api_call(url, data["opener"])
 
+    if response is None:
+        return None
     return response["leader"]
 
 
