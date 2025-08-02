@@ -1,3 +1,7 @@
+> # :warning: End of Support (EoS) Notice
+> 
+> This plugin is deprecated and no longer maintained.
+
 # collectd Apache Solr Plugin
 
 An apache solr [collectd](http://www.collectd.org/) plugin which users can use to send metrics from solr instances to SignalFx
